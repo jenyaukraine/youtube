@@ -215,7 +215,7 @@ input::placeholder{color:#738198}.hint{font-size:11.5px;color:var(--txt3);line-h
 .worker-stop{border:1px solid #5c4b54;border-radius:8px;background:#261c25;color:#ff9ba3;padding:7px 9px;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-stop:hover{background:#38242b;border-color:var(--red)}
 .worker{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:12px}
 .worker-preview{position:relative;grid-column:1/-1;aspect-ratio:1365/768;overflow:hidden;border:1px solid #354153;border-radius:10px;background:#090d14;display:grid;place-items:center;color:var(--txt3);font-size:12px}
-.worker-preview img{width:100%;height:100%;object-fit:contain;display:block}
+.worker-preview img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
 .worker-preview img{cursor:pointer;user-select:none;-webkit-user-drag:none;touch-action:none}
 .worker-preview.expanded{position:fixed;inset:12px;width:auto;height:auto;aspect-ratio:auto;z-index:100;border:2px solid var(--green);box-shadow:0 0 0 100vmax rgba(0,0,0,.8),0 24px 80px #000}
 .worker-preview:focus{outline:2px solid var(--green)}
@@ -392,7 +392,7 @@ input[type=url]::placeholder{color:#8290a3}
           <path class="grid-line" d="M0 28 H600 M0 56 H600 M0 84 H600"/>
           <path class="cpu-area" id="cpuArea" d=""/><path class="cpu-line" id="cpuLine" d=""/>
         </svg>
-        <div class="system-foot"><span>RAM <b id="ramValue">0%</b></span><span>Chromium-процессов <b id="browserValue">0</b></span><span>Обновление каждые 2 с</span></div>
+        <div class="system-foot"><span>RAM <b id="ramValue">0%</b></span><span>Всего процессов Chrome на устройстве <b id="browserValue">0</b></span><span>Обновление каждые 2 с</span></div>
       </div>
       <div class="promo-kit">
         <h3>Быстрые ссылки ♡</h3>
@@ -833,11 +833,13 @@ function loadShot(card, force=false){
   card._shotLoading=true;
   card.querySelector('.shot-time').textContent = img.hidden ? 'Подключаю кадр…' : '● Live';
   const next = new Image();
+  next.alt = img.alt;
+  next.draggable = false;
   next.src = `/api/worker/${encodeURIComponent(job)}/${encodeURIComponent(worker)}/screenshot?force=${force ? 1 : 0}&t=${now}`;
   next.decode().then(() => {
-    if(!card.isConnected) return;
-    img.src = next.src;
-    img.hidden = false;
+    if(!card.isConnected || card._pointerStart) return;
+    img.after(next);
+    requestAnimationFrame(() => img.remove());
     card.querySelector('.preview-note').hidden = true;
     card.querySelector('.shot-time').textContent = '● Live ' + new Date().toLocaleTimeString('ru-RU');
   }).catch(() => {
