@@ -136,6 +136,19 @@ claude mcp add katya -- cmd /c D:\Projects\youtube\Katya-MCP.bat
 «Загрузить распакованное». Расширение подключает выбранную вкладку к панели; на страницах входа Google оно не работает —
 вход выполняется вручную.
 
+## React-панель (web/)
+
+Панель по адресу `/` — React + TypeScript из папки `web/`, собранная в `static/app/` (сборка хранится в репозитории, чтобы
+Windows и Docker работали без Node). Универсальные компоненты: `ScenarioPanel` (прогресс, запись, повтор, сохранение,
+выбор шага), `StepList`, `TabCard` (живой кадр с кликами, колесом, клавиатурой), `StartForm`, `Automation`, страница
+сценариев — всё на одном `katya-base.css` + `katya.css`. Старая панель доступна по `/legacy/`, режим «Мой Chrome» — пока там.
+
+```bash
+cd web && pnpm install
+pnpm dev        # http://localhost:5173 с прокси на запущенный app.py (8010)
+pnpm build      # tsc + vite -> static/app
+```
+
 ## Структура репозитория
 
 | путь | что это |

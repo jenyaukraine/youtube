@@ -9,3 +9,4 @@ venv/
 *.jpg
 *.jpeg
 *.png
+web/node_modules/

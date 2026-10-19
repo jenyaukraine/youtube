@@ -1040,6 +1040,21 @@ async def no_cache_static(request, call_next):
     return response
 
 
+REACT_INDEX = os.path.join(STATIC, "app", "index.html")
+
+
+@app.get("/", include_in_schema=False)
+async def root_page():
+    """React-панель (static/app, собирается из web/), пока она не собрана — старая панель."""
+    return FileResponse(REACT_INDEX if os.path.exists(REACT_INDEX) else os.path.join(STATIC, "index.html"))
+
+
+@app.get("/legacy/", include_in_schema=False)
+@app.get("/legacy", include_in_schema=False)
+async def legacy_page():
+    return FileResponse(os.path.join(STATIC, "index.html"))
+
+
 app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
 
 if __name__ == "__main__":
