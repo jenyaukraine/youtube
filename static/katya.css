@@ -259,3 +259,49 @@ footer{margin-top:28px;font-size:11.5px;color:var(--txt-3)}footer b{color:var(--
   .worker-control .recorder .macro-pick{max-width:100%;width:100%}
   .worker-actions{justify-content:flex-start}
 }
+
+/* ---------- 12. Страница сценариев (scenarios.html) ---------- */
+body.page-scenarios,.layout{font-family:var(--font)}
+.top a{color:var(--txt-2);border:1px solid var(--line-2);background:var(--surface-3);border-radius:var(--r-s);padding:0 12px;min-height:34px;display:inline-flex;align-items:center;font:700 12px var(--font)}
+.top h1{font-size:22px;letter-spacing:-.03em}.top p{color:var(--txt-3);font-size:13px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-l);padding:22px}
+.panel h2{font-size:14px;margin-bottom:16px}.section h3{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt-2)}
+.btn{min-height:34px;padding:0 12px;border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--surface-3);color:var(--txt-2);font:700 12px var(--font);display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn:hover{border-color:var(--txt-3);color:var(--txt)}
+.btn.primary{background:var(--accent);border-color:transparent;color:var(--accent-ink)}.btn.primary:hover{background:#a3ecb3}
+.btn.full{width:100%;min-height:42px;font-size:13px}
+.btn.tiny{min-height:28px;padding:0 9px;font-size:11px}
+.btn.danger{color:var(--txt-3)}.btn.danger:hover{border-color:var(--rec);color:var(--rec)}
+label.btn{text-transform:none;letter-spacing:0;font-size:12px;color:var(--txt-2);margin:0;cursor:pointer}
+.scenario-list button{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-s);color:var(--txt);padding:11px 12px}
+.scenario-list button.active{border-color:rgba(143,227,162,.5);background:var(--accent-dim)}
+.scenario-list small{color:var(--txt-3)}
+.step{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-m);padding:12px}
+.runbox,.preview,.progress{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-m)}
+
+/* ---------- 13. FX: клубная подсветка, свечение, параллакс ---------- */
+.fx-canvas{position:fixed;inset:0;z-index:0;pointer-events:none;display:none}
+.fx-on .bg-fx{opacity:.35}
+.fx-on .wrap{position:relative;z-index:1}
+.fx-on .card,.fx-on .goal,.fx-on .panel,.fx-on .log{background:rgba(18,22,32,.78);backdrop-filter:blur(14px) saturate(1.15);-webkit-backdrop-filter:blur(14px) saturate(1.15)}
+.fx-on .worker-control,.fx-on .tile,.fx-on .system-panel,.fx-on .auto-col,.fx-on .auto-item,.fx-on .recorded-steps li{background:rgba(23,28,40,.72)}
+.fx-on .logo{box-shadow:0 0 24px rgba(143,227,162,.35),inset 0 0 12px rgba(143,227,162,.15)}
+.fx-on .brand h1 span{text-shadow:0 0 18px rgba(143,227,162,.55)}
+.fx-on .btn-go{box-shadow:0 0 0 1px rgba(143,227,162,.4),0 8px 28px rgba(143,227,162,.28);animation:fxbreath 3.75s ease-in-out infinite}
+@keyframes fxbreath{0%,100%{box-shadow:0 0 0 1px rgba(143,227,162,.4),0 8px 28px rgba(143,227,162,.22)}50%{box-shadow:0 0 0 1px rgba(143,227,162,.7),0 10px 40px rgba(143,227,162,.45)}}
+.fx-on .worker-preview{box-shadow:0 0 0 1px rgba(255,255,255,.04),0 20px 60px rgba(0,0,0,.45)}
+.fx-on .worker:has(.st.watching) .worker-preview{box-shadow:0 0 0 1px rgba(143,227,162,.45),0 0 40px rgba(143,227,162,.22)}
+.fx-on .worker:has(.record-toggle.recording) .worker-preview{box-shadow:0 0 0 1px rgba(255,122,133,.55),0 0 44px rgba(255,122,133,.25)}
+.fx-on .worker:has(.st.error) .worker-preview,.fx-on .worker:has(.st.blocked) .worker-preview{box-shadow:0 0 0 1px rgba(255,122,133,.4)}
+.fx-on .dot{box-shadow:0 0 0 3px var(--accent-dim),0 0 14px var(--accent)}
+.fx-on .st.watching{box-shadow:0 0 0 3px var(--accent-dim),0 0 12px var(--accent)}
+.fx-on .system-chart .cpu-line{filter:drop-shadow(0 0 6px rgba(143,227,162,.6))}
+.fx-on .scenario-track i{box-shadow:0 0 12px var(--accent)}
+.fx-on .toast{box-shadow:0 0 0 1px rgba(255,255,255,.05),0 18px 50px rgba(0,0,0,.6),0 0 30px rgba(143,227,162,.15)}
+.fx-on .preview-tools button.on{box-shadow:0 0 18px rgba(143,227,162,.5)}
+/* появление карточек */
+.fx-on .worker,.fx-on .auto-item{animation:fxrise .45s cubic-bezier(.2,.8,.2,1) both}
+@keyframes fxrise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.fx-toggle{display:inline-flex;align-items:center;min-height:34px;padding:0 12px;border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--surface-3);color:var(--txt-3);font:700 12px var(--font);cursor:pointer}
+.fx-toggle.on{color:var(--accent);border-color:rgba(143,227,162,.4);text-shadow:0 0 10px rgba(143,227,162,.6)}
+@media(prefers-reduced-motion:reduce){.fx-on .btn-go,.fx-on .worker,.fx-on .auto-item{animation:none}}
