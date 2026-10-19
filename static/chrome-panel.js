@@ -51,6 +51,7 @@
     BrowserCore.markTimeline($('chromeStepList'), {selected: selectedStep ?? -1, failed: failedStep ?? -1});
     $('chromeStepActions').hidden = selectedStep === null;
     if (selectedStep !== null) $('chromeSelectedStep').textContent = `Шаг ${selectedStep + 1} · ${stepLabel(source()?.steps?.[selectedStep] || {})}`;
+    if (selectedStep !== null) $('chromeScenarioNow').textContent = `Начать с шага ${selectedStep + 1}: ${stepLabel(source()?.steps?.[selectedStep] || {})}`;
     showScenarioButton();
   }
   function showScenario() {
@@ -248,10 +249,10 @@
         showScenarioButton();
         throw new Error(`Шаг ${result.index + 1}: ${result.error}`);
       }
-      runState(cancelled ? 'Остановлено' : `Готово · ${result.completed} повторов`);
+      runState(cancelled ? 'Остановлено' : `Готово · ${result.completed} ${result.completed === 1 ? 'повтор' : 'повторов'}`);
       items.forEach(li => li.classList.remove('current'));
       if (!cancelled) items.forEach((li, i) => li.classList.toggle('done', i >= from));
-      $('chromeScenarioStatus').textContent = cancelled ? 'Остановлено' : `Готово · ${selected.steps.length}/${selected.steps.length}`;
+      $('chromeScenarioStatus').textContent = cancelled ? 'Остановлено' : from ? `Готово · с шага ${from + 1}` : `Готово · ${selected.steps.length}/${selected.steps.length}`;
       $('chromeScenarioNow').textContent = cancelled ? 'Выполнение остановлено' : 'Сценарий выполнен';
       $('chromeScenarioTrack').style.width = cancelled ? $('chromeScenarioTrack').style.width : '100%';
     } catch (error) { runState(error.message, 'err'); toast(error.message, 'err'); }
