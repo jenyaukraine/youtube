@@ -218,6 +218,7 @@ input::placeholder{color:#738198}.hint{font-size:11.5px;color:var(--txt3);line-h
 .worker-preview img{cursor:pointer;user-select:none;-webkit-user-drag:none;touch-action:none}
 .worker-preview.expanded{position:fixed;inset:12px;width:auto;height:auto;aspect-ratio:auto;z-index:100;border:2px solid var(--green);box-shadow:0 0 0 100vmax rgba(0,0,0,.8),0 24px 80px #000}
 .worker-preview:focus{outline:2px solid var(--green)}
+.preview-key-capture{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;resize:none}
 body.preview-expanded{overflow:hidden}
 .worker-preview .preview-note{position:absolute;inset:0;display:grid;place-items:center;background:#090d14;color:var(--txt3)}
 .worker-preview [hidden]{display:none}
@@ -550,7 +551,7 @@ $('workersPanel').addEventListener('click', async e => {
         if(data?.ok){ card.querySelector('.worker-control').open=true; card.querySelector('.action-type').value='click'; card.querySelector('.action-kind').value='css'; card.querySelector('.action-query').value=data.selector; updateActionFields(card); }
       }else {
         activePreviewCard=card;
-        card.querySelector('.worker-preview').focus();
+        card.querySelector('.preview-key-capture').focus();
         sendPreviewInput(card,{action:'point',...point});
       }
     }
@@ -632,11 +633,12 @@ document.addEventListener('pointerdown', e => {
 },true);
 document.addEventListener('keydown', e => {
   const preview=e.target.closest('.worker-preview');
+  if(e.target.matches('.preview-key-capture') && e.key.length===1 && !e.ctrlKey && !e.metaKey && !e.altKey) return;
   if(e.target.matches('.preview-typebar input')){
     if(e.key==='Enter'){ e.preventDefault(); preview.querySelector('.preview-type-send').click(); }
     return;
   }
-  if(e.target.closest('input,textarea,select,[contenteditable="true"]')) return;
+  if(e.target.closest('input,textarea,select,[contenteditable="true"]') && !e.target.matches('.preview-key-capture')) return;
   const card=preview?.closest('.worker') || activePreviewCard;
   if(!card?.isConnected) return;
   if(e.key.length===1 && !e.ctrlKey && !e.metaKey && !e.altKey){
@@ -649,6 +651,18 @@ document.addEventListener('keydown', e => {
   if((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='a'){
     e.preventDefault(); pressPreviewKey(card,'ControlOrMeta+A');
   }
+});
+document.addEventListener('input', e => {
+  if(!e.target.matches('.preview-key-capture') || e.isComposing) return;
+  const text=e.target.value;
+  e.target.value='';
+  if(text) queuePreviewText(e.target.closest('.worker'),text);
+});
+document.addEventListener('compositionend', e => {
+  if(!e.target.matches('.preview-key-capture')) return;
+  const text=e.target.value;
+  e.target.value='';
+  if(text) queuePreviewText(e.target.closest('.worker'),text);
 });
 document.addEventListener('paste', e => {
   if(e.target.closest('input,textarea,[contenteditable="true"]')) return;
@@ -760,7 +774,7 @@ function render(data){
       if(!card){
         card = document.createElement('div');
         card.className = 'worker'; card.dataset.id = w.id;
-        card.innerHTML = `<div class="worker-preview" tabindex="0"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми или прокрути" draggable="false" hidden><span class="preview-hint">Кликни в поле и печатай · колесо для прокрутки</span><div class="preview-typebar" hidden><input type="text" placeholder="Текст в выбранное поле" aria-label="Текст в выбранное поле" autocomplete="off"><button type="button" class="preview-type-send">Написать</button><button type="button" class="preview-enter">Enter</button><button type="button" class="preview-tab">Tab</button><button type="button" class="preview-backspace">⌫</button></div><div class="preview-tools"><button type="button" class="preview-up" title="Прокрутить вверх">↑ Вверх</button><button type="button" class="preview-down" title="Прокрутить вниз">↓ Вниз</button><button type="button" class="preview-keyboard">⌨ Ввод</button><button type="button" class="preview-pick">⌕ Выбрать элемент</button><button type="button" class="preview-expand">⛶ Развернуть</button></div><span class="shot-time">Ожидаю кадр…</span></div>
+        card.innerHTML = `<div class="worker-preview" tabindex="0"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми или прокрути" draggable="false" hidden><textarea class="preview-key-capture" aria-label="Клавиатура вкладки" autocomplete="off"></textarea><span class="preview-hint">Кликни в поле и печатай · колесо для прокрутки</span><div class="preview-typebar" hidden><input type="text" placeholder="Текст в выбранное поле" aria-label="Текст в выбранное поле" autocomplete="off"><button type="button" class="preview-type-send">Написать</button><button type="button" class="preview-enter">Enter</button><button type="button" class="preview-tab">Tab</button><button type="button" class="preview-backspace">⌫</button></div><div class="preview-tools"><button type="button" class="preview-up" title="Прокрутить вверх">↑ Вверх</button><button type="button" class="preview-down" title="↓ Вниз">↓ Вниз</button><button type="button" class="preview-keyboard">⌨ Ввод</button><button type="button" class="preview-pick">⌕ Выбрать элемент</button><button type="button" class="preview-expand">⛶ Развернуть</button></div><span class="shot-time">Ожидаю кадр…</span></div>
           <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
           <div class="worker-actions"><button type="button" class="worker-shot">Обновить кадр</button><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
           <div class="worker-url"></div>
