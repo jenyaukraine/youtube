@@ -101,6 +101,7 @@ class Job:
         self.dialogs = dialogs          # what to do with alert/confirm/prompt: dismiss|accept
         self.profile = profile          # fixed profile name, or "" for random
         self.headers: Dict[str, str] = {}
+        self.steps: List[Step] = []     # run after load in every tab
         self.workers_list: List[Worker] = []
         self.status = "pending"         # pending|running|stopped
         self.created = time.time()
@@ -254,6 +255,14 @@ async def worker_loop(job: Job, w: Worker, page: Page):
         w.state = "checking"
         w.last_action = "Проверяю страницу"
         log(f"worker {w.id} loaded {job.url[:40]} as {w.profile or 'chromium'}")
+        if job.steps:
+            w.last_action = f"Сценарий: {len(job.steps)} шагов"
+            result = await run_steps(page, job.steps, delay_ms=300, lock=job.page_lock(w.id),
+                                     screenshot_sink=make_screenshot_sink(w.id))
+            w.last_action = (f"Сценарий выполнен: {result['completed']} шагов" if result["ok"]
+                             else f"Сценарий остановлен на шаге {result['completed'] + 1}: {result.get('error', '')[:60]}")
+            log(f"worker {w.id} start scenario: {result['completed']}/{len(job.steps)} steps")
+            job.screenshots.pop(w.id, None)
 
         last_tick = time.time()
         last_video_time = None
@@ -487,6 +496,7 @@ class StartReq(BaseModel):
     user_agent_mode: Literal["chrome", "random", "browser"] = "chrome"
     profile: str = ""           # fixed profile name from /api/profiles (optional)
     dialogs: Literal["dismiss", "accept"] = "dismiss"
+    steps: List[Step] = []      # scenario to run in every tab right after the page loads
 
 HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 FORBIDDEN_HEADERS = {"authorization", "cookie", "proxy-authorization", "host", "content-length",
@@ -520,8 +530,13 @@ async def start(req: StartReq):
     duration = max(0, int(req.duration))
     jid = uuid.uuid4().hex[:8]
     cookies = cookies_from_string(req.cookies)
+    for step in req.steps:
+        step_error = validate_step(step)
+        if step_error:
+            return JSONResponse({"ok": False, "error": f"Сценарий: {step_error}"}, status_code=400)
     job = Job(jid, url, workers, duration, cookies, req.user_agent_mode, req.dialogs, req.profile)
     job.headers = req.headers
+    job.steps = req.steps[:200]
     JOBS[jid] = job
     asyncio.create_task(run_job(job))
     log(f"NEW JOB {jid} url={job.url} workers={workers} duration={duration} cookies={'yes' if cookies else 'no'}")

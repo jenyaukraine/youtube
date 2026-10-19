@@ -307,6 +307,8 @@ input[type=url]::placeholder{color:#8290a3}
 .auto-col h3 button{padding:7px 10px;font-size:11px}
 @media(max-width:900px){.auto-grid{grid-template-columns:1fr}.auto-col:first-child{grid-row:auto}}
 @media(max-width:600px){.auto-head{align-items:flex-start}.token-settings{margin-left:0;width:100%}.auto-col{padding:16px}.auto-col h3{align-items:flex-start;flex-wrap:wrap}.auto-col h3 .hint{white-space:normal}}
+.manual-action{margin-top:12px;border-top:1px dashed #334050;padding-top:8px}.manual-action summary{cursor:pointer;color:#8192a8;font-size:11px;font-weight:700}
+select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:10px;color:var(--txt);padding:11px 13px;font:600 13px 'Manrope',sans-serif}
 </style>
 </head>
 <body>
@@ -366,6 +368,9 @@ input[type=url]::placeholder{color:#8290a3}
       <select id="uaMode" aria-label="Профиль браузера"><option value="chrome">Родной профиль браузера</option><option value="random">Случайный Chrome или Edge</option><option value="browser">Браузер без профиля</option></select>
       <div class="hint">На ПК используется установленный Chrome, на сервере — Chromium Playwright. Для каждого запуска создаётся отдельная сессия.</div>
 
+      <label for="startScenario">Сценарий при открытии</label>
+      <select id="startScenario" aria-label="Сценарий при открытии"><option value="">Нет, просто открыть страницу</option></select>
+      <div class="hint">Вкладка откроет адрес и сразу выполнит сохранённые шаги. Повторы — в поле справа от «Повторить».</div>
       <details class="advanced"><summary>HTTP-заголовки для новых вкладок</summary>
         <textarea id="customHeaders" spellcheck="false" placeholder='{"Accept-Language":"ru-RU,ru;q=0.9"}'></textarea>
         <div class="hint">Формат JSON. Применяются ко всем запросам новой вкладки. Токены, Cookie и Authorization сюда не вводи.</div>
@@ -493,7 +498,7 @@ async function start(){
     const r = await fetch('/api/start', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({url, workers:+wr.value, duration, headers, user_agent_mode:$('uaMode').value})
+      body: JSON.stringify({url, workers:+wr.value, duration, headers, user_agent_mode:$('uaMode').value, steps:startSteps()})
     });
     const j = await r.json();
     if(!j.ok) toast(j.error || 'Ошибка запуска','err');
@@ -525,7 +530,7 @@ function updateActionFields(card){
 
 function renderSteps(card){
   const list=card.querySelector('.recorded-steps');
-  list.replaceChildren(...(card._steps||[]).map((step,i)=>{ const item=document.createElement('li'); item.textContent=`${i+1}. ${step.action} ${step.query||step.value||((step.x||0).toFixed(2)+', '+(step.y||0).toFixed(2))}`; return item; }));
+  list.replaceChildren(...(card._steps||[]).map((step,i)=>{ const item=document.createElement('li'); item.textContent=`${step.action} ${step.query||step.value||((step.x||0).toFixed(2)+', '+(step.y||0).toFixed(2))}`; return item; }));
   const count=card._steps?.length||0;
   card.querySelector('.record-status').textContent=card.dataset.recording==='1'
     ? `● Запись идёт · ${count} шагов · действия на снимке сохраняются сразу`
@@ -714,11 +719,6 @@ $('workersPanel').addEventListener('change', async e => {
     toast(`Загружено шагов: ${card._steps.length}. Нажми «Повторить» для запуска.`);
   }
 });
-$('workersPanel').addEventListener('keydown', e => {
-  if(e.target.matches('.scenario-name') && e.key==='Enter'){
-    e.preventDefault(); e.target.closest('.scenario-save').querySelector('.scenario-save-confirm').click();
-  }
-});
 $('workersPanel').addEventListener('click', async e => {
   if(e.target.matches('.preview-expand')){
     const preview=e.target.closest('.worker-preview');
@@ -741,7 +741,7 @@ $('workersPanel').addEventListener('click', async e => {
     if(point){
       if(card.dataset.previewMode==='pick'){
         const data=await runAction(card,{action:'inspect',...point},{record:false,refresh:false});
-        if(data?.ok){ card.querySelector('.worker-control').open=true; card.querySelector('.action-type').value='click'; card.querySelector('.action-kind').value='css'; card.querySelector('.action-query').value=data.selector; updateActionFields(card); }
+        if(data?.ok){ card.querySelector('.worker-control').open=true; card.querySelector('.manual-action').open=true; card.querySelector('.action-type').value='click'; card.querySelector('.action-kind').value='css'; card.querySelector('.action-query').value=data.selector; updateActionFields(card); }
       }else {
         activePreviewCard=card;
         card.querySelector('.preview-key-capture').focus();
@@ -751,29 +751,23 @@ $('workersPanel').addEventListener('click', async e => {
     return;
   }
   if(e.target.matches('.record-save')){
-    const card=e.target.closest('.worker'), form=card.querySelector('.scenario-save');
-    if(!card._steps?.length){toast('Сначала включи запись и сделай действие на снимке','err');return;}
-    form.hidden=!form.hidden;
-    if(!form.hidden) form.querySelector('input').focus();
-    return;
-  }
-  if(e.target.matches('.scenario-save-confirm')){
-    const card=e.target.closest('.worker'), name=card.querySelector('.scenario-name').value.trim();
-    if(!name){ toast('Назови сценарий','err'); return; }
-    if(!card._steps?.length){ toast('Сначала запиши хотя бы одно действие','err'); return; }
+    const card=e.target.closest('.worker');
+    if(!card._steps?.length){ toast('Сначала включи запись и сделай действие на снимке','err'); return; }
+    const startUrl=card._recordStartUrl || card.querySelector('.worker-url').textContent;
+    let host=''; try{ host=new URL(startUrl).hostname.replace(/^www\./,''); }catch{}
+    const name=`${host||'Сценарий'} · ${card._steps.length} шагов · ${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`;
     const saved=localList(SCENARIO_STORE);
     const id=crypto.randomUUID?.() || String(Date.now());
-    saved.unshift({id,name,startUrl:card._recordStartUrl || card.querySelector('.worker-url').textContent,steps:card._steps,createdAt:new Date().toISOString()});
+    saved.unshift({id,name,startUrl,steps:card._steps,createdAt:new Date().toISOString()});
     try{ localStorage.setItem(SCENARIO_STORE,JSON.stringify(saved.slice(0,50))); }
     catch{ toast('Не удалось сохранить сценарий','err'); return; }
-    card.querySelector('.scenario-save').hidden=true;
-    document.querySelectorAll('.macro-pick').forEach(fillMacroPick);
-    const job=card.querySelector('.worker-stop').dataset.job;
-    const controlToken=sessionStorage.getItem('katya_control_'+job)||'';
-    const headers=controlToken?{'X-Katya-Job':job,'X-Katya-Control-Token':controlToken}:{};
-    const r=await apiFetch('/api/macros',{method:'POST',headers,body:JSON.stringify({name,steps:card._steps,description:'scenario'})});
-    toast(r.ok ? 'Сценарий сохранён на сервере' : 'Черновик сохранён в этом браузере; сервер: '+(r.error||'ошибка'), r.ok?'ok':'err');
+    forgetDraft(card);
+    document.querySelectorAll('.macro-pick').forEach(fillMacroPick); fillStartScenario();
+    const job=card.querySelector('.worker-stop').dataset.job, control_token=sessionStorage.getItem('katya_control_'+job)||'';
+    const r=await apiFetch('/api/macros',{method:'POST',headers:{'X-Katya-Job':job,'X-Katya-Control-Token':control_token},body:JSON.stringify({name,steps:card._steps,description:startUrl})});
     if(r.ok) loadMacros();
+    e.target.textContent='✓ Сохранено'; setTimeout(()=>{ if(e.target.isConnected) e.target.textContent='💾 Сохранить сценарий'; },2500);
+    toast(`Сохранено: ${name}. Запускай через «Сценарий при открытии» или раздел «Сценарии»`);
     return;
   }
   if(e.target.matches('.record-toggle,.record-replay,.record-copy,.record-clear')){
@@ -1020,7 +1014,10 @@ function render(data){
           <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
           <div class="worker-actions"><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
           <div class="worker-url"></div>
-          <details class="worker-control"><summary>Управление вкладкой · клик / ввод / перетаскивание</summary>
+          <details class="worker-control" open><summary>Запись шагов и сценарии</summary>
+            <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><div class="repeat-control"><input type="number" class="repeat-count" min="1" max="100" step="1" value="1" aria-label="Сколько раз повторить"><span>раз</span><button type="button" class="record-replay">▶ Повторить</button></div><button type="button" class="record-save">💾 Сохранить сценарий</button><select class="macro-pick" aria-label="Выбрать сохранённую запись"><option value="">Загрузить запись…</option></select><button type="button" class="record-copy">Копировать шаги</button><button type="button" class="record-clear">Очистить</button></div><div class="record-status" aria-live="polite"></div>
+            <ol class="recorded-steps"></ol>
+            <details class="manual-action"><summary>Ручное действие по селектору · для точной настройки</summary>
             <div class="control-grid">
               <select class="action-type" aria-label="Действие"><option value="click">Кликнуть</option><option value="wait_click">Ждать и кликнуть</option><option value="fill">Ввести текст</option><option value="hover">Навести мышь</option><option value="drag">Перетащить</option><option value="scroll">Прокрутить</option><option value="press">Нажать клавишу</option><option value="navigate">Открыть URL</option><option value="dblclick">Двойной клик</option><option value="type">Печатать по буквам</option><option value="select">Выбрать в списке</option><option value="wait_for">Ждать появления</option><option value="wait_gone">Ждать исчезновения</option><option value="wait">Пауза (мс)</option><option value="text">Прочитать текст</option><option value="screenshot">Скриншот в файлы</option><option value="reload">Перезагрузить</option></select>
               <select class="action-kind" aria-label="Найти элемент"><option value="css">CSS selector</option><option value="text">Текст</option><option value="label">Label</option><option value="role:button">Роль: кнопка</option><option value="role:link">Роль: ссылка</option><option value="role:textbox">Роль: поле ввода</option><option value="role:checkbox">Роль: checkbox</option><option value="placeholder">Placeholder</option><option value="xpath">XPath</option></select>
@@ -1028,9 +1025,7 @@ function render(data){
               <input class="action-value" placeholder="Значение" aria-label="Значение" hidden>
             </div>
             <div class="control-help"></div><button type="button" class="worker-action-run">Выполнить действие</button>
-            <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><div class="repeat-control"><input type="number" class="repeat-count" min="1" max="100" step="1" value="1" aria-label="Сколько раз повторить"><span>раз</span><button type="button" class="record-replay">▶ Повторить</button></div><button type="button" class="record-save">Сохранить сценарий</button><select class="macro-pick" aria-label="Выбрать сохранённую запись"><option value="">Загрузить запись…</option></select><button type="button" class="record-copy">Копировать шаги</button><button type="button" class="record-clear">Очистить</button></div><div class="record-status" aria-live="polite"></div>
-            <div class="scenario-save" hidden><input class="scenario-name" maxlength="80" placeholder="Название сценария" aria-label="Название сценария"><button type="button" class="scenario-save-confirm">Сохранить</button></div>
-            <ol class="recorded-steps"></ol>
+            </details>
           </details>`;
         const img = card.querySelector('img');
         panel.append(card);
@@ -1079,7 +1074,18 @@ async function loadMacros(){
     item.querySelector('.copy').onclick=async()=>{ try{ await navigator.clipboard.writeText(JSON.stringify(m.steps,null,2)); toast('JSON скопирован'); }catch{ toast('Не удалось скопировать','err'); } };
     item.querySelector('.danger').onclick=async()=>{ if(!confirm(`Удалить макрос «${m.name}»?`)) return; const d=await apiFetch(`/api/macros/${encodeURIComponent(m.name)}`,{method:'DELETE'}); toast(d.ok?'Удалено':(d.error||'Ошибка'),d.ok?'ok':'err'); loadMacros(); };
     return item; }));
-  document.querySelectorAll('.macro-pick').forEach(fillMacroPick);
+  document.querySelectorAll('.macro-pick').forEach(fillMacroPick); fillStartScenario();
+}
+function startSteps(){
+  const choice=$('startScenario').value; if(!choice) return [];
+  const source=choice.startsWith('scenario:')?localList(SCENARIO_STORE).find(s=>s.id===choice.slice(9)):MACROS.find(m=>m.name===choice.slice(6));
+  return (source?.steps||[]).map(({action,kind,query,role,value,x,y,end_x,end_y,nth,timeout_ms,optional,name})=>({action,kind,query,role,value,x,y,end_x,end_y,nth,timeout_ms,optional,name}));
+}
+function fillStartScenario(){
+  const select=$('startScenario'), current=select.value;
+  const scenarios=localList(SCENARIO_STORE).filter(s=>s.steps?.length).map(s=>new Option(`${s.name} (${s.steps.length} шагов)`,`scenario:${s.id}`));
+  const macros=MACROS.filter(m=>!localList(SCENARIO_STORE).some(s=>s.name===m.name)).map(m=>new Option(`${m.name} (сервер)`,`macro:${m.name}`));
+  select.replaceChildren(new Option('Нет, просто открыть страницу',''),...scenarios,...macros); select.value=current;
 }
 function fillMacroPick(select){
   const current=select.value;
