@@ -236,6 +236,7 @@ PLAYBACK_JS = r"""() => {
   const visibleError = playerError && playerError.getClientRects().length
     ? playerError.innerText.trim().slice(0, 180) : '';
   return {
+    verification: /Войдите в аккаунт, чтобы подтвердить, что вы не бот|Sign in to confirm (?:you are|you're|you’re) not a bot/i.test(text),
     consent: location.hostname.startsWith('consent.') ||
       (/(^|\.)youtube\.com$/.test(location.hostname) &&
        /Прежде чем перейти к YouTube|Before you continue to YouTube|Bevor Sie zu YouTube weitergehen|Avant de continuer sur YouTube|Перш ніж перейти на YouTube|Принять все|Accept all|Alle akzeptieren/i.test(text)),
@@ -269,7 +270,10 @@ async def worker_loop(job: Job, w: Worker, page: Page):
                 w.url = page.url
                 video_time = playback["time"]
                 progress = video_time - last_video_time if video_time is not None and last_video_time is not None else 0
-                if playback["consent"]:
+                if playback["verification"]:
+                    w.state = "blocked"
+                    w.last_action = "YouTube требует подтверждения, что вы не бот"
+                elif playback["consent"]:
                     w.state = "blocked"
                     w.last_action = "Окно согласия YouTube"
                 elif playback["error"]:
