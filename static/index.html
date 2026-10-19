@@ -385,9 +385,9 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
         <button data-d="3600">1 час</button>
       </div>
 
-      <label for="uaMode">Профиль браузера для каждой вкладки</label>
-      <select id="uaMode" aria-label="Профиль браузера"><option value="chrome">Родной профиль браузера</option><option value="random">Случайный Chrome или Edge</option><option value="browser">Браузер без профиля</option></select>
-      <div class="hint">На ПК используется установленный Chrome, на сервере — Chromium Playwright. Для каждого запуска создаётся отдельная сессия.</div>
+      <label for="uaMode">User-Agent новой вкладки</label>
+      <select id="uaMode" aria-label="User-Agent новой вкладки"><option value="chrome">Без подмены User-Agent</option><option value="random">Подменить на Chrome или Edge</option><option value="browser">Без подмены</option></select>
+      <div class="hint">Сайт запускает отдельный управляемый браузер на сервере. Подмена User-Agent не превращает его в Chrome на твоём ПК и не переносит вход в Google.</div>
 
       <label for="startScenario">Сценарий при открытии</label>
       <select id="startScenario" aria-label="Сценарий при открытии"><option value="">Нет, просто открыть страницу</option></select>
