@@ -323,3 +323,28 @@ label.btn{text-transform:none;letter-spacing:0;font-size:12px;color:var(--txt-2)
 .worker-control .recorder .recorder-menu button:hover{background:var(--surface-3);color:var(--txt)}
 .worker-control .recorder .record-clear.icon{min-width:34px;padding:0;background:transparent;border-color:transparent;color:var(--txt-3);font-size:14px;opacity:.55}
 .worker-control .recorder .record-clear.icon:hover{opacity:1;color:var(--rec);border-color:transparent}
+
+/* ---------- 15. Прогресс сценария: что происходит сейчас ---------- */
+.scenario-progress{padding:14px 16px}
+.scenario-progress-head strong{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--txt-3)}
+.scenario-progress-status{font:600 11px var(--mono);color:var(--txt-3)}
+.scenario-now{display:flex;align-items:baseline;gap:10px;margin-top:6px;min-height:24px;flex-wrap:wrap}
+.scenario-now-k{font-size:16px;font-weight:800;letter-spacing:-.02em;color:var(--txt)}
+.scenario-now-t{font:500 13px var(--font);color:var(--txt-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scenario-progress:not(.done) .scenario-now-k::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--info);margin-right:8px;vertical-align:middle;animation:nowpulse 1.2s ease-in-out infinite}
+.scenario-progress.done .scenario-now-k{color:var(--accent)}.scenario-progress.done .scenario-now-k::before{content:'✓';margin-right:6px}
+.scenario-progress.error .scenario-now-k{color:var(--rec)}.scenario-progress.error .scenario-now-k::before{display:none}
+@keyframes nowpulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(127,184,255,.5)}50%{opacity:.7;box-shadow:0 0 0 5px rgba(127,184,255,0)}}
+.scenario-track{height:4px;margin-top:10px}
+.scenario-track i{transition:width .4s cubic-bezier(.2,.8,.2,1)}
+.scenario-steps{display:flex;gap:4px;margin-top:10px;padding:2px 0;overflow-x:auto;scrollbar-width:none;list-style:none;align-items:center}
+.scenario-steps::-webkit-scrollbar{display:none}
+.scenario-steps li{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 7px;max-width:none;border:1px solid var(--line-2);border-radius:6px;background:var(--surface);color:var(--txt-3);font:600 10.5px var(--mono);cursor:pointer;white-space:nowrap;transition:all .2s}
+.scenario-steps li span{display:none;font:600 11px var(--font)}
+.scenario-steps li:hover{border-color:var(--txt-3);color:var(--txt)}
+.scenario-steps li.done{border-color:rgba(143,227,162,.35);background:var(--accent-dim);color:var(--accent)}
+.scenario-steps li.current{border-color:var(--info);background:rgba(127,184,255,.16);color:#e6f1ff;padding:0 10px;box-shadow:0 0 14px rgba(127,184,255,.35)}
+.scenario-steps li.current span,.scenario-steps li:hover span{display:inline}
+.scenario-steps li.failed{border-color:var(--rec);background:var(--rec-dim);color:#ffd4d8}
+.scenario-steps li.failed span{display:inline}
+.scenario-progress.done .scenario-steps li{opacity:.75}

@@ -432,17 +432,6 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
         </svg>
         <div class="system-foot"><span>RAM <b id="ramValue">0%</b></span><span>Всего процессов Chrome на устройстве <b id="browserValue">0</b></span><span>Обновление каждые 2 с</span></div>
       </div>
-      <div class="promo-kit">
-        <h3>Быстрые ссылки ♡</h3>
-        <p>Открой адрес на своём устройстве, скопируй или сохрани в избранное этого браузера.</p>
-        <div class="promo-actions">
-          <button type="button" id="promoOpen">Открыть адрес ↗</button>
-          <button type="button" id="promoLink">Копировать ссылку</button>
-          <button type="button" id="promoFavorite">♡ Сохранить</button>
-          <button type="button" id="promoShare">Поделиться</button>
-        </div>
-        <div class="favorite-list" id="favoriteList"></div>
-      </div>
     </div>
   </div>
 
@@ -569,32 +558,62 @@ function renderScenario(card,worker){
     card._scenarioId=worker._j.id;
     card.querySelector('.scenario-steps').replaceChildren(...steps.map((step,index)=>{
       const label=step.action==='wait'?`Пауза ${(Number(step.duration_ms)/1000).toFixed(1)} с`:(step.name||ACTION_LABELS[step.action]||step.action);
-      const li=document.createElement('li'); li.textContent=`${index+1}. ${label}`; li.title='Нажми — загрузить сценарий в запись и повторять с этого шага'; return li;
+      const li=document.createElement('li'); li.innerHTML='<b></b><span></span>'; li.querySelector('b').textContent=index+1; li.querySelector('span').textContent=label; li.title=`${index+1}. ${label} — нажми, чтобы повторять с этого шага`; return li;
     }));
   }
   pane.classList.toggle('error',status.phase==='error');
   card.querySelector('.scenario-track i').style.width=`${Math.max(0,Math.min(100,(status.completed||0)/steps.length*100))}%`;
+  const running=status.phase==='running', cur=status.current||0;
   card.querySelectorAll('.scenario-steps li').forEach((li,index)=>{
     li.classList.toggle('done',index<(status.completed||0));
-    li.classList.toggle('current',status.phase==='running' && index===status.current);
+    li.classList.toggle('current',running && index===cur);
+    li.classList.toggle('failed',status.phase==='error' && index===cur);
   });
+  pane.classList.toggle('done',status.phase==='done');
+  const stepLabel=i=>{ const st=steps[i]; if(!st) return ''; return st.action==='wait'?`Пауза ${(Number(st.duration_ms)/1000).toFixed(1)} с`:(st.name||ACTION_LABELS[st.action]||st.action)+(st.query?` · ${st.query}`:st.value&&st.action!=='type'?` · ${String(st.value).slice(0,40)}`:''); };
+  const nowK=card.querySelector('.scenario-now-k'), nowT=card.querySelector('.scenario-now-t');
+  if(running){ nowK.textContent=`Шаг ${cur+1} из ${steps.length}`; nowT.textContent=stepLabel(cur); }
+  else if(status.phase==='error'){ nowK.textContent=`Ошибка на шаге ${cur+1}`; nowT.textContent=stepLabel(cur); }
+  else if(status.phase==='done'){ nowK.textContent='Выполнено'; nowT.textContent=`${steps.length} шагов · повторить можно кнопкой ▶ ниже`; }
+  else if(status.phase==='waiting'){ nowK.textContent='Ожидание'; nowT.textContent=`страница грузится, первый шаг: ${stepLabel(0)}`; }
+  else { nowK.textContent='Открывается страница'; nowT.textContent=stepLabel(0); }
+  if(running && card._scenarioCur!==cur){ card._scenarioCur=cur; card.querySelector('.scenario-steps li.current')?.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'}); }
   const label=card.querySelector('.scenario-progress-status');
+  const pauseMs=running && steps[cur]?.action==='wait' ? Math.min(60000,Math.max(0,Number(steps[cur].duration_ms)||0)) : 0;
+  if(pauseMs){
+    if(card._scenarioPause?.index!==cur){ card._scenarioPause={index:cur,until:Date.now()+pauseMs}; }
+  }else card._scenarioPause=null;
   if(status.phase==='waiting'){
     label.dataset.waitUntil=String(status.wait_until||0);
     updateScenarioCountdown(label);
   } else {
     delete label.dataset.waitUntil;
-    label.textContent=!status.phase?'Открывается страница':status.phase==='done'?'Готово · '+steps.length+'/'+steps.length:
-      status.phase==='error'?`Ошибка на шаге ${(status.current||0)+1}`:
+    label.textContent=!status.phase?'':status.phase==='done'?`Готово · ${steps.length}/${steps.length}`:
+      status.phase==='error'?`Остановлен · ${status.completed||0}/${steps.length}`:
       `Выполняется · ${status.completed||0}/${steps.length}`;
   }
+  if(pauseMs) updateScenarioPauseCountdown(card);
+}
+function updateScenarioPauseCountdown(card){
+  const pause=card._scenarioPause;
+  if(!pause || !card.isConnected) return;
+  const left=Math.max(0,(pause.until-Date.now())/1000);
+  const seconds=left.toFixed(1);
+  const text=`Пауза · осталось ${seconds} с`;
+  card.querySelector('.scenario-now-t').textContent=text;
+  card.querySelector('.scenario-progress-status').textContent=text;
+  const chip=card.querySelectorAll('.scenario-steps li')[pause.index]?.querySelector('span');
+  if(chip) chip.textContent=`${seconds} с`;
 }
 function updateScenarioCountdown(label){
   if(!label.dataset.waitUntil) return;
   const remaining=Math.max(0,Math.ceil(Number(label.dataset.waitUntil)-Date.now()/1000));
   label.textContent=`Старт через ${remaining} с · 0/${label.closest('.worker').querySelectorAll('.scenario-steps li').length}`;
 }
-setInterval(()=>document.querySelectorAll('.scenario-progress-status[data-wait-until]').forEach(updateScenarioCountdown),500);
+setInterval(()=>{
+  document.querySelectorAll('.scenario-progress-status[data-wait-until]').forEach(updateScenarioCountdown);
+  document.querySelectorAll('.worker').forEach(updateScenarioPauseCountdown);
+},100);
 const DRAFT_STORE='katya_recording_drafts_v1';
 const SCENARIO_STORE='katya_scenarios_v1';
 function localList(key){try{const data=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(data)?data:[];}catch{return [];}}
@@ -1023,27 +1042,6 @@ setInterval(() => {
   }
 },250);
 
-function promoUrl(){
-  const raw = $('url').value.trim();
-  if(/^https?:\/\/[^\s/]+/i.test(raw)) return raw;
-  const id = raw.match(/(?:youtu\.be\/|v=|\/videos\/|embed\/|shorts\/)([A-Za-z0-9_-]{11})/)?.[1] || (/^[A-Za-z0-9_-]{11}$/.test(raw) ? raw : null);
-  if(!id){ toast('Сначала вставь адрес страницы','err'); return null; }
-  return `https://www.youtube.com/watch?v=${id}`;
-}
-async function copyPromo(text, success){
-  try { await navigator.clipboard.writeText(text); toast(success); }
-  catch { toast('Не удалось скопировать. Проверь разрешение браузера.','err'); }
-}
-$('promoOpen').onclick = () => { const url=promoUrl(); if(url) window.open(url,'_blank','noopener,noreferrer'); };
-$('promoLink').onclick = () => { const url=promoUrl(); if(url) copyPromo(url,'Ссылка скопирована'); };
-function renderFavorites(){
-  let list=[]; try{ list=JSON.parse(localStorage.getItem('katya_favorites')||'[]'); }catch{}
-  $('favoriteList').replaceChildren(...list.map(url => { const button=document.createElement('button'); button.textContent='♡ '+url; button.title=url; button.onclick=()=>{ $('url').value=url; toast('Адрес выбран'); }; return button; }));
-}
-$('promoFavorite').onclick = () => { const url=promoUrl(); if(!url) return; let list=[]; try{ list=JSON.parse(localStorage.getItem('katya_favorites')||'[]'); }catch{}; list=[url,...list.filter(x=>x!==url)].slice(0,8); localStorage.setItem('katya_favorites',JSON.stringify(list)); renderFavorites(); toast('Ссылка сохранена'); };
-$('promoShare').onclick = async () => { const url=promoUrl(); if(!url) return; if(navigator.share){ try{ await navigator.share({title:'Ссылка',url}); }catch{} }else{ copyPromo(url,'Ссылка скопирована'); } };
-renderFavorites();
-
 function fmtH(s){ return (s/3600).toFixed(3); }
 function escapeHtml(value){ return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function renderSystem(system){
@@ -1102,7 +1100,7 @@ function render(data){
       if(!card){
         card = document.createElement('div');
         card.className = 'worker'; card.dataset.id = w.id;
-        card.innerHTML = `<div class="scenario-progress" hidden><div class="scenario-progress-head"><strong>Выполнение сценария</strong><span class="scenario-progress-status"></span></div><div class="scenario-track"><i></i></div><ol class="scenario-steps"></ol></div>
+        card.innerHTML = `<div class="scenario-progress" hidden><div class="scenario-progress-head"><strong>Сценарий</strong><span class="scenario-progress-status"></span></div><div class="scenario-now"><span class="scenario-now-k"></span><span class="scenario-now-t"></span></div><div class="scenario-track"><i></i></div><ol class="scenario-steps" aria-label="Шаги сценария"></ol></div>
           <div class="worker-preview" tabindex="0"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми, выдели или прокрути" draggable="false" hidden><textarea class="preview-key-capture" aria-label="Клавиатура вкладки" autocomplete="off"></textarea><div class="preview-tools"><button type="button" class="preview-pick">⌕ Выбрать элемент</button></div><button type="button" class="preview-expand">⛶ Развернуть</button><span class="shot-time">Ожидаю кадр…</span></div>
           <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
           <div class="worker-actions"><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
