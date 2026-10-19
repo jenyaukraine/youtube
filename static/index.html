@@ -216,6 +216,8 @@ input::placeholder{color:#738198}.hint{font-size:11.5px;color:var(--txt3);line-h
 .worker-preview{position:relative;grid-column:1/-1;aspect-ratio:1365/768;overflow:hidden;border:1px solid #354153;border-radius:10px;background:#090d14;display:grid;place-items:center;color:var(--txt3);font-size:12px}
 .worker-preview img{width:100%;height:100%;object-fit:contain;display:block}
 .worker-preview img{cursor:pointer;user-select:none;-webkit-user-drag:none;touch-action:none}
+.worker-preview.expanded{position:fixed;inset:12px;width:auto;height:auto;aspect-ratio:auto;z-index:100;border:2px solid var(--green);box-shadow:0 0 0 100vmax rgba(0,0,0,.8),0 24px 80px #000}
+body.preview-expanded{overflow:hidden}
 .worker-preview .preview-note{position:absolute;inset:0;display:grid;place-items:center;background:#090d14;color:var(--txt3)}
 .worker-preview [hidden]{display:none}
 .worker-meta{display:flex;align-items:center;gap:12px;min-width:0}.worker-meta .act{min-width:0}.worker .secs{white-space:nowrap}
@@ -474,7 +476,7 @@ $('workersPanel').addEventListener('wheel', e => {
 },{passive:false});
 
 $('workersPanel').addEventListener('pointerdown', e => {
-  if(!e.target.matches('.worker-preview img')) return;
+  if(!e.target.matches('.worker-preview img') || e.button!==0) return;
   e.target.closest('.worker')._pointerStart = {x:e.clientX,y:e.clientY,id:e.pointerId};
 });
 $('workersPanel').addEventListener('pointerup', e => {
@@ -493,6 +495,13 @@ $('workersPanel').addEventListener('change', e => {
   if(e.target.matches('.action-type')) updateActionFields(e.target.closest('.worker'));
 });
 $('workersPanel').addEventListener('click', async e => {
+  if(e.target.matches('.preview-expand')){
+    const preview=e.target.closest('.worker-preview');
+    const expanded=preview.classList.toggle('expanded');
+    document.body.classList.toggle('preview-expanded',expanded);
+    e.target.textContent=expanded ? '⤢ Свернуть' : '⛶ Развернуть';
+    return;
+  }
   if(e.target.matches('.preview-up,.preview-down')){
     const card=e.target.closest('.worker');
     queuePreviewScroll(card,e.target.matches('.preview-up') ? -540 : 540,{x:0.5,y:0.5});
@@ -563,6 +572,14 @@ $('workersPanel').addEventListener('click', async e => {
     if(data.ok && action === 'reload') setTimeout(() => { if(card.isConnected) loadShot(card, true); }, 2500);
   } catch { toast('Нет связи с сервером','err'); }
   button.disabled = false;
+});
+document.addEventListener('keydown', e => {
+  if(e.key!=='Escape') return;
+  const preview=document.querySelector('.worker-preview.expanded');
+  if(!preview) return;
+  preview.classList.remove('expanded');
+  document.body.classList.remove('preview-expanded');
+  preview.querySelector('.preview-expand').textContent='⛶ Развернуть';
 });
 
 function loadShot(card, force=false){
@@ -651,7 +668,7 @@ function render(data){
       if(!card){
         card = document.createElement('div');
         card.className = 'worker'; card.dataset.id = w.id;
-        card.innerHTML = `<div class="worker-preview"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми или прокрути" draggable="false" hidden><span class="preview-hint">Клик · колесо или перетаскивание для прокрутки</span><div class="preview-tools"><button type="button" class="preview-up" title="Прокрутить вверх">↑ Вверх</button><button type="button" class="preview-down" title="Прокрутить вниз">↓ Вниз</button><button type="button" class="preview-pick">⌕ Выбрать элемент</button></div><span class="shot-time">Ожидаю кадр…</span></div>
+        card.innerHTML = `<div class="worker-preview"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми или прокрути" draggable="false" hidden><span class="preview-hint">Клик · колесо или перетаскивание для прокрутки</span><div class="preview-tools"><button type="button" class="preview-up" title="Прокрутить вверх">↑ Вверх</button><button type="button" class="preview-down" title="Прокрутить вниз">↓ Вниз</button><button type="button" class="preview-pick">⌕ Выбрать элемент</button><button type="button" class="preview-expand">⛶ Развернуть</button></div><span class="shot-time">Ожидаю кадр…</span></div>
           <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
           <div class="worker-actions"><button type="button" class="worker-shot">Обновить кадр</button><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
           <div class="worker-url"></div>
