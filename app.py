@@ -140,7 +140,9 @@ class Job:
             "total_watch_hours": round(self.total_watch() / 3600, 3),
             "created": self.created,
             "workers_list": [w.snapshot() for w in self.workers_list],
-            "scenario_steps": [{"action": step.action, "name": step.name} for step in self.steps],
+            "scenario_steps": [{"action": step.action, "name": step.name,
+                                "duration_ms": step.value if step.action == "wait" else ""}
+                               for step in self.steps],
         }
         if with_token:
             data["control_token"] = self.control_token
@@ -279,7 +281,9 @@ async def worker_loop(job: Job, w: Worker, page: Page):
                 w.last_action = (f"Сценарий: шаг {index + 1}/{w.scenario_total} · {job.steps[index].action}"
                                  if phase == "running" else
                                  f"Сценарий: {w.scenario_completed}/{w.scenario_total} шагов")
-            result = await run_steps(page, job.steps, delay_ms=650, lock=job.page_lock(w.id),
+            result = await run_steps(page, job.steps,
+                                     delay_ms=0 if any(step.action == "wait" for step in job.steps) else 1500,
+                                     lock=job.page_lock(w.id),
                                      screenshot_sink=make_screenshot_sink(w.id),
                                      on_progress=on_scenario_progress)
             w.scenario_phase = "done" if result["ok"] else "error"

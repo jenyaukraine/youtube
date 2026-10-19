@@ -550,10 +550,10 @@ function updateActionFields(card){
 
 function renderSteps(card){
   const list=card.querySelector('.recorded-steps');
-  list.replaceChildren(...(card._steps||[]).map((step,i)=>{ const item=document.createElement('li'); item.textContent=`${step.action} ${step.query||step.value||((step.x||0).toFixed(2)+', '+(step.y||0).toFixed(2))}`; return item; }));
+  list.replaceChildren(...(card._steps||[]).map((step,i)=>{ const item=document.createElement('li'); item.textContent=step.action==='wait'?`Пауза ${(Number(step.value)/1000).toFixed(1)} с`:`${step.action} ${step.query||step.value||((step.x||0).toFixed(2)+', '+(step.y||0).toFixed(2))}`; return item; }));
   const count=card._steps?.length||0;
   card.querySelector('.record-status').textContent=card.dataset.recording==='1'
-    ? `● Запись идёт · ${count} шагов · действия на снимке сохраняются сразу`
+    ? `● Запись идёт · ${count} шагов · паузы между действиями сохраняются`
     : count ? `${count} шагов · черновик сохранён в этом браузере` : 'Записываются действия через снимок и панель вкладки.';
 }
 const ACTION_LABELS={scroll:'Прокрутка',point:'Клик',type:'Ввод',press:'Клавиша',click:'Клик',fill:'Заполнение',wait:'Пауза',navigate:'Переход',screenshot:'Снимок',mouse_drag:'Перетаскивание'};
@@ -564,7 +564,8 @@ function renderScenario(card,worker){
   if(card._scenarioId!==worker._j.id){
     card._scenarioId=worker._j.id;
     card.querySelector('.scenario-steps').replaceChildren(...steps.map((step,index)=>{
-      const li=document.createElement('li'); li.textContent=`${index+1}. ${step.name||ACTION_LABELS[step.action]||step.action}`; return li;
+      const label=step.action==='wait'?`Пауза ${(Number(step.duration_ms)/1000).toFixed(1)} с`:(step.name||ACTION_LABELS[step.action]||step.action);
+      const li=document.createElement('li'); li.textContent=`${index+1}. ${label}`; return li;
     }));
   }
   pane.classList.toggle('error',status.phase==='error');
@@ -869,7 +870,7 @@ $('workersPanel').addEventListener('click', async e => {
             if(card._cancelReplay || !card.isConnected) break;
             const result=await runAction(card,steps[i],{quiet:true,record:false,refresh:false});
             if(!result?.ok){ failedStep=i+1; break; }
-            if(i<steps.length-1 && !steps.some(step=>step.action==='wait')) await new Promise(resolve=>setTimeout(resolve,500));
+            if(i<steps.length-1 && !steps.some(step=>step.action==='wait')) await new Promise(resolve=>setTimeout(resolve,1500));
           }
           if(failedStep || card._cancelReplay || !card.isConnected) break;
           completedRuns++;
