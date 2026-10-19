@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 
 ActionName = Literal[
     "navigate", "reload", "back",
-    "click", "wait_click", "dblclick", "point", "inspect",
+    "click", "wait_click", "dblclick", "point", "mouse_drag", "inspect",
     "fill", "type", "press", "hover", "drag", "scroll", "select",
     "wait", "wait_for", "wait_gone", "wait_url",
     "text", "attribute", "exists", "count", "screenshot", "page_text",
@@ -50,6 +50,8 @@ class Step(BaseModel):
     value: str = ""
     x: float = 0
     y: float = 0
+    end_x: float = 0                 # mouse_drag end point (fractions)
+    end_y: float = 0
     nth: int = 0                     # which match to use when several elements match (0 = require exactly one)
     timeout_ms: int = 7000
     optional: bool = False           # a failing optional step does not stop a macro
@@ -97,8 +99,10 @@ def validate_step(step: Step) -> Optional[str]:
         return "Действие type: укажи текст"
     if step.action == "navigate" and not normalize_url(step.value):
         return "Неверный URL"
-    if step.action in {"point", "inspect"} and not (0 <= step.x <= 1 and 0 <= step.y <= 1):
+    if step.action in {"point", "inspect", "mouse_drag"} and not (0 <= step.x <= 1 and 0 <= step.y <= 1):
         return "Точка вне вкладки (x и y должны быть от 0 до 1)"
+    if step.action == "mouse_drag" and not (0 <= step.end_x <= 1 and 0 <= step.end_y <= 1):
+        return "Конечная точка вне вкладки (end_x и end_y от 0 до 1)"
     if not (100 <= step.timeout_ms <= MAX_TIMEOUT_MS):
         return f"timeout_ms должен быть от 100 до {MAX_TIMEOUT_MS}"
     if step.nth < 0 or step.nth > 500:
@@ -183,6 +187,16 @@ async def run_step(page: Page, step: Step, *, screenshot_sink=None) -> Dict[str,
             if not viewport:
                 return {"ok": False, "error": "Неизвестен размер вкладки"}
             await page.mouse.click(round(step.x * viewport["width"]), round(step.y * viewport["height"]))
+        elif step.action == "mouse_drag":
+            viewport = page.viewport_size
+            if not viewport:
+                return {"ok": False, "error": "Неизвестен размер вкладки"}
+            await page.mouse.move(step.x * viewport["width"], step.y * viewport["height"])
+            await page.mouse.down()
+            try:
+                await page.mouse.move(step.end_x * viewport["width"], step.end_y * viewport["height"], steps=14)
+            finally:
+                await page.mouse.up()
         elif step.action == "inspect":
             viewport = page.viewport_size
             if not viewport:

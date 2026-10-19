@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Сценарии · Katya Browser Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1018;--card:#151c28;--line:#354254;--text:#e7eff7;--muted:#9aabbc;--green:#a8ef78;--red:#ff9aa5}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(800px 500px at 100% -10%,#213226 0,transparent 70%),var(--bg);color:var(--text);font:14px system-ui,sans-serif}button,input,select,textarea{font:inherit}button{cursor:pointer}a{color:var(--green)}
+.wrap{max-width:1450px;margin:auto;padding:28px}.top{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:24px}.top h1{margin:0;font-size:26px}.top p{margin:5px 0 0;color:var(--muted)}.top a{text-decoration:none;border:1px solid var(--line);border-radius:10px;padding:11px 14px;background:var(--card)}
+.layout{display:grid;grid-template-columns:290px minmax(0,1fr);gap:18px}.panel{background:var(--card);border:1px solid var(--line);border-radius:17px;padding:19px}.panel h2{margin:0 0 16px;font-size:17px}.sidebar{align-self:start}.scenario-list{display:grid;gap:8px;margin:16px 0}.scenario-list button{width:100%;text-align:left;border:1px solid var(--line);background:#101722;color:var(--text);padding:12px;border-radius:10px}.scenario-list button.active{border-color:var(--green);background:#203429}.scenario-list small{display:block;color:var(--muted);margin-top:4px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row>*{min-width:0}.btn{border:1px solid var(--line);background:#202c3c;color:var(--text);padding:10px 13px;border-radius:9px;font-weight:700}.btn:hover{border-color:var(--green)}.btn.primary{background:var(--green);border-color:var(--green);color:#10200f}.btn.danger{color:var(--red)}.btn:disabled{opacity:.5;cursor:wait}.full{width:100%}
+label{display:block;color:var(--muted);font-weight:700;font-size:12px;margin:13px 0 6px}input,select,textarea{width:100%;background:#0e1520;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px 11px;outline:0}input:focus,select:focus,textarea:focus{border-color:var(--green)}.hint{color:var(--muted);font-size:12px;line-height:1.45}.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.section{border-top:1px solid var(--line);margin-top:22px;padding-top:20px}.section h3{margin:0 0 6px;font-size:16px}.step-list{display:grid;gap:10px;margin-top:14px}.step{border:1px solid var(--line);border-radius:12px;background:#101722;padding:13px}.step-head{display:flex;justify-content:space-between;gap:8px;align-items:center}.step-head strong{color:var(--green)}.step-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.step label{margin-top:8px}.step .tiny{padding:7px 9px;font-size:12px}.step .wide{grid-column:1/-1}.variable-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px}.runbox{margin-top:22px;padding:18px;border:1px solid #547147;background:#1b2b22;border-radius:13px}.runbox .row{margin-top:14px}.runbox input[type=number]{width:90px}.progress{margin-top:12px;color:var(--muted);min-height:20px}.preview{width:100%;max-height:450px;object-fit:contain;background:#0a0f16;border:1px solid var(--line);border-radius:10px;margin-top:12px}.preview[hidden]{display:none}.empty{color:var(--muted);padding:45px 10px;text-align:center}.secret-note{color:var(--muted);font-size:11px;margin-top:5px}
+@media(max-width:850px){.layout{grid-template-columns:1fr}.cols,.variable-grid{grid-template-columns:1fr}.wrap{padding:18px}.top{align-items:flex-start}.step-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body><div class="wrap">
+<div class="top"><div><h1>Сценарии <span style="color:var(--green)">↗</span></h1><p>Записывай действия во вкладке, подставляй данные и повторяй шаги.</p></div><a href="/">← Вкладки</a></div>
+<div class="layout"><aside class="panel sidebar"><h2>Мои сценарии</h2><button class="btn primary full" id="newScenario">+ Новый сценарий</button><div class="scenario-list" id="scenarioList"></div><div class="row"><button class="btn" id="exportScenario">Скачать JSON</button><label class="btn" style="margin:0;cursor:pointer">Импорт JSON<input id="importScenario" type="file" accept="application/json,.json" hidden></label></div><p class="hint">Записанные действия сохраняются в этом браузере. Во вкладке нажми «Записать шаги», затем «Сохранить сценарий».</p></aside>
+<main class="panel" id="editor"><div class="empty">Выбери сценарий слева или создай новый.</div></main></div></div>
+<script>
+const STORE='katya_scenarios_v1';
+const ACTIONS={navigate:'Открыть URL',point:'Клик по кадру',mouse_drag:'Выделить мышью',click:'Клик по элементу',wait_click:'Ждать и кликнуть',fill:'Заполнить поле',type:'Напечатать',press:'Нажать клавишу',scroll:'Прокрутить',hover:'Навести',drag:'Перетащить',wait:'Пауза'};
+const KINDS={css:'CSS',text:'Текст',label:'Label',role:'Роль'};
+const $=id=>document.getElementById(id);
+let scenarios=[],selected=null,running=false,cancelled=false,currentJob=null,actionAbort=null,previewTimer=null;
+try{scenarios=JSON.parse(localStorage.getItem(STORE)||'[]');if(!Array.isArray(scenarios))scenarios=[];}catch{}
+function save(){localStorage.setItem(STORE,JSON.stringify(scenarios));}
+function optionHtml(map,current){return Object.entries(map).map(([value,label])=>`<option value="${value}" ${value===current?'selected':''}>${label}</option>`).join('');}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function current(){return scenarios.find(s=>s.id===selected);}
+function renderList(){
+  const list=$('scenarioList'); list.replaceChildren();
+  for(const s of scenarios){const b=document.createElement('button');b.className=s.id===selected?'active':'';const name=document.createElement('strong');name.textContent=s.name;const small=document.createElement('small');small.textContent=`${s.steps?.length||0} шагов · ${s.startUrl||'адрес не задан'}`;b.append(name,small);b.onclick=()=>{selected=s.id;render();};list.append(b);}
+}
+function variablesFor(s){
+  const found=new Set(['username','email','role','password']);
+  for(const step of s.steps||[]) for(const match of String(step.value||'').matchAll(/{{\s*([a-zA-Z][\w]*)\s*}}/g)) found.add(match[1]);
+  return [...found];
+}
+function render(){
+  renderList(); const s=current(), root=$('editor');
+  if(!s){root.innerHTML='<div class="empty">Выбери сценарий слева или создай новый.</div>';return;}
+  root.innerHTML=`<div class="row" style="justify-content:space-between"><h2 style="margin:0">Редактор сценария</h2><div class="row"><button class="btn" id="duplicate">Дублировать</button><button class="btn danger" id="delete">Удалить</button></div></div>
+    <div class="cols"><div><label>Название</label><input id="scenarioName" maxlength="80" value="${esc(s.name)}"></div><div><label>Стартовая страница</label><input id="startUrl" placeholder="https://example.com" value="${esc(s.startUrl||'')}"></div></div>
+    <p class="hint">Запись шагов выполняется во вкладках. Здесь можно уточнить селекторы, порядок действий и переменные.</p>
+    <div class="section"><div class="row" style="justify-content:space-between"><div><h3>Шаги</h3><div class="hint">Записанные клики по кадру можно заменить точным CSS, текстом или label.</div></div><button class="btn" id="addStep">+ Шаг</button></div><div class="step-list" id="stepList"></div></div>
+    <div class="section"><h3>Переменные</h3><div class="hint">В значении шага используй {{username}}, {{email}}, {{role}}, {{password}} или {{input1}}. Шаблоны: {n} — номер повтора, {rand4} — четыре цифры, {word} — слово из списка.</div><div class="variable-grid" id="variableGrid"></div><label>Слова для {word}, через запятую</label><input id="wordList" value="${esc(s.wordList||'Бэтмен, Супермен')}"><div class="secret-note">Пароль вводится только перед запуском и не сохраняется в сценарии.</div></div>
+    <div class="runbox"><h3 style="margin:0">Запуск</h3><div class="row"><label style="margin:0">Повторов <input id="repeatCount" type="number" min="1" max="50" value="1"></label><button class="btn primary" id="runScenario">▶ Запустить</button><button class="btn danger" id="cancelScenario" disabled>Остановить</button></div><div class="progress" id="runProgress">Готово к запуску</div><img class="preview" id="runPreview" alt="Кадр сценария" hidden></div>`;
+  renderSteps();renderVariables();bindEditor();
+}
+function renderSteps(){
+  const s=current(),list=$('stepList');if(!list)return;list.replaceChildren();
+  if(!s.steps.length){list.innerHTML='<div class="hint">Шагов пока нет. Запиши действия во вкладке или добавь шаг здесь.</div>';return;}
+  s.steps.forEach((step,index)=>{
+    const row=document.createElement('div');row.className='step';row.dataset.index=index;
+    row.innerHTML=`<div class="step-head"><strong>Шаг ${index+1}</strong><div class="row"><button class="btn tiny move-up" title="Вверх">↑</button><button class="btn tiny move-down" title="Вниз">↓</button><button class="btn tiny danger remove-step" title="Удалить">×</button></div></div>
+      <div class="step-grid"><div><label>Действие</label><select class="step-action">${optionHtml(ACTIONS,step.action)}</select></div><div><label>Поиск элемента</label><select class="step-kind">${optionHtml(KINDS,step.kind||'css')}</select></div><div><label>Элемент / селектор</label><input class="step-query" placeholder="button, Продолжить, Email" value="${esc(step.query||'')}"></div><div><label>Значение / {{переменная}}</label><input class="step-value" placeholder="{{username}}, Enter, 500" value="${esc(step.value||'')}"></div><div><label>X (0–1)</label><input class="step-x" type="number" min="0" max="1" step="0.01" value="${Number(step.x)||0}"></div><div><label>Y (0–1)</label><input class="step-y" type="number" min="0" max="1" step="0.01" value="${Number(step.y)||0}"></div><div><label>Конец X (0–1)</label><input class="step-end-x" type="number" min="0" max="1" step="0.01" value="${Number(step.end_x)||0}"></div><div><label>Конец Y (0–1)</label><input class="step-end-y" type="number" min="0" max="1" step="0.01" value="${Number(step.end_y)||0}"></div><div class="wide hint">Для клика по кадру нужны X/Y. Для ввода и клика по элементу укажи способ поиска и элемент. Пауза задаётся в миллисекундах.</div></div>`;
+    list.append(row);
+  });
+}
+function renderVariables(){
+  const s=current(),grid=$('variableGrid');grid.replaceChildren();
+  for(const name of variablesFor(s)){
+    const wrap=document.createElement('div'),label=document.createElement('label'),input=document.createElement('input');
+    label.textContent=`{{${name}}}`;input.dataset.variable=name;input.placeholder=name==='username'?'user{n}{rand4}':name==='email'?'user{n}@example.test':name==='role'?'{word}':`Значение ${name}`;
+    if(name==='password'){input.type='password';input.autocomplete='new-password';}else input.value=s.variables?.[name]||'';
+    wrap.append(label,input);grid.append(wrap);
+  }
+}
+function bindEditor(){
+  const s=current();
+  $('scenarioName').oninput=e=>{s.name=e.target.value;save();renderList();};
+  $('startUrl').onchange=e=>{s.startUrl=e.target.value.trim();save();renderList();};
+  $('wordList').onchange=e=>{s.wordList=e.target.value;save();};
+  $('variableGrid').onchange=e=>{if(!e.target.dataset.variable||e.target.dataset.variable==='password')return;s.variables=s.variables||{};s.variables[e.target.dataset.variable]=e.target.value;save();};
+  $('stepList').onchange=e=>{const row=e.target.closest('.step');if(!row)return;const step=s.steps[+row.dataset.index];step.action=row.querySelector('.step-action').value;step.kind=row.querySelector('.step-kind').value;step.query=row.querySelector('.step-query').value;step.value=row.querySelector('.step-value').value;step.x=Number(row.querySelector('.step-x').value);step.y=Number(row.querySelector('.step-y').value);step.end_x=Number(row.querySelector('.step-end-x').value);step.end_y=Number(row.querySelector('.step-end-y').value);save();if(e.target.matches('.step-value'))renderVariables();};
+  $('stepList').onclick=e=>{const row=e.target.closest('.step');if(!row)return;const i=+row.dataset.index;if(e.target.matches('.remove-step'))s.steps.splice(i,1);else if(e.target.matches('.move-up')&&i>0)[s.steps[i-1],s.steps[i]]=[s.steps[i],s.steps[i-1]];else if(e.target.matches('.move-down')&&i<s.steps.length-1)[s.steps[i+1],s.steps[i]]=[s.steps[i],s.steps[i+1]];else return;save();renderSteps();renderVariables();renderList();};
+  $('addStep').onclick=()=>{s.steps.push({action:'click',kind:'css',query:'',value:'',x:0,y:0});save();renderSteps();renderList();};
+  $('duplicate').onclick=()=>{const copy=structuredClone(s);copy.id=crypto.randomUUID();copy.name+=' (копия)';scenarios.unshift(copy);save();selected=copy.id;render();};
+  $('delete').onclick=()=>{if(!confirm(`Удалить «${s.name}»?`))return;scenarios=scenarios.filter(x=>x.id!==s.id);selected=scenarios[0]?.id||null;save();render();};
+  $('runScenario').onclick=runScenario;$('cancelScenario').onclick=cancelRun;
+}
+function expandTemplate(raw,n,words,randoms){return String(raw||'').replace(/\{n\}/g,String(n)).replace(/\{rand(\d{1,2})\}/g,(_,count)=>{const digits=Math.min(12,+count);return randoms[digits]??=(Array.from({length:digits},()=>Math.floor(Math.random()*10)).join(''));}).replace(/\{word\}/g,words[(n-1)%words.length]||'');}
+function valuesFor(s,n){
+  const words=(s.wordList||'Бэтмен, Супермен').split(',').map(x=>x.trim()).filter(Boolean);const values={},randoms={};
+  for(const name of variablesFor(s)){
+    const input=document.querySelector(`[data-variable="${name}"]`);
+    values[name]=expandTemplate(input?.value||'',n,words,randoms);
+  }
+  return values;
+}
+function substitute(raw,values){return String(raw||'').replace(/{{\s*([a-zA-Z][\w]*)\s*}}/g,(_,name)=>values[name]??'');}
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function call(method,path,body,signal){const r=await fetch(path,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined,signal});const data=await r.json();if(!data.ok)throw Error(data.error||`HTTP ${r.status}`);return data;}
+async function waitWorker(jobId,signal){for(let i=0;i<40;i++){if(cancelled)throw Error('Остановлено');const data=await call('GET','/api/status',null,signal);const job=data.jobs.find(j=>j.id===jobId),worker=job?.workers_list?.[0];if(worker&&worker.state!=='starting')return worker.id;await pause(500);}throw Error('Вкладка не открылась за 20 секунд');}
+function updatePreview(jobId,workerId,token){const img=$('runPreview');if(!img)return;img.hidden=false;img.src=`/api/worker/${encodeURIComponent(jobId)}/${encodeURIComponent(workerId)}/screenshot?control_token=${encodeURIComponent(token)}&force=1&t=${Date.now()}`;}
+async function cancelRun(){cancelled=true;actionAbort?.abort();if(currentJob)try{await call('POST',`/api/job/${encodeURIComponent(currentJob)}/stop`);}catch{}const p=$('runProgress');if(p)p.textContent='Остановлено';}
+async function runScenario(){
+  if(running)return;const s=current();if(!s)return;
+  const count=Math.max(1,Math.min(50,Number($('repeatCount').value)||1));
+  if(!/^https?:\/\//i.test(s.startUrl||'')||!s.steps.length){$('runProgress').textContent='Укажи стартовый URL и хотя бы один шаг';return;}
+  $('runScenario').disabled=true;$('cancelScenario').disabled=false;running=true;cancelled=false;
+  try{
+    for(let n=1;n<=count;n++){
+      if(cancelled)break;
+      const values=valuesFor(s,n),startUrl=substitute(s.startUrl,values);
+      $('runProgress').textContent=`Повтор ${n}/${count} · открываю страницу`;
+      const started=await call('POST','/api/start',{url:startUrl,workers:1,duration:0});currentJob=started.id;
+      try{
+        const worker=await waitWorker(started.id);updatePreview(started.id,worker,started.control_token);
+        previewTimer=setInterval(()=>updatePreview(started.id,worker,started.control_token),2500);
+        for(let i=0;i<s.steps.length;i++){
+          if(cancelled)throw Error('Остановлено');const step=s.steps[i];$('runProgress').textContent=`Повтор ${n}/${count} · шаг ${i+1}/${s.steps.length}: ${ACTIONS[step.action]||step.action}`;
+          if(step.action==='wait'){await pause(Math.max(0,Math.min(60000,Number(substitute(step.value,values))||0)));continue;}
+          actionAbort=new AbortController();
+          const payload={...step,value:substitute(step.value,values),query:substitute(step.query,values),control_token:started.control_token};
+          await call('POST',`/api/worker/${encodeURIComponent(started.id)}/${encodeURIComponent(worker)}/action`,payload,actionAbort.signal);
+          updatePreview(started.id,worker,started.control_token);
+        }
+      }finally{clearInterval(previewTimer);previewTimer=null;await call('POST',`/api/job/${encodeURIComponent(started.id)}/stop`).catch(()=>{});currentJob=null;await pause(250);}
+    }
+    $('runProgress').textContent=cancelled?'Остановлено':`Готово · ${count} повторов`;
+  }catch(e){$('runProgress').textContent=`Ошибка: ${e.message}`;}
+  finally{running=false;actionAbort=null;clearInterval(previewTimer);if($('runScenario')){$('runScenario').disabled=false;$('cancelScenario').disabled=true;}}
+}
+$('newScenario').onclick=()=>{const s={id:crypto.randomUUID(),name:'Новый сценарий',startUrl:'',steps:[],variables:{},wordList:'Бэтмен, Супермен',createdAt:new Date().toISOString()};scenarios.unshift(s);selected=s.id;save();render();$('scenarioName').select();};
+$('exportScenario').onclick=()=>{const data=JSON.stringify(scenarios,null,2),blob=new Blob([data],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='katya-scenarios.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+$('importScenario').onchange=async e=>{try{const data=JSON.parse(await e.target.files[0].text());if(!Array.isArray(data))throw Error();const incoming=data.filter(x=>x&&typeof x.name==='string'&&Array.isArray(x.steps)).slice(0,50).map(x=>({...x,id:crypto.randomUUID()}));scenarios.unshift(...incoming);save();selected=incoming[0]?.id||selected;render();}catch{alert('Не удалось прочитать JSON сценариев');}e.target.value='';};
+selected=location.hash.slice(1)||scenarios[0]?.id||null;render();
+</script></body></html>

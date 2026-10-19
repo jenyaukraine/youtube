@@ -57,6 +57,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:6px
 .brand p{font-size:12px;color:var(--txt3);margin-top:2px}
 .badge{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt2);
   background:var(--card);border:1px solid var(--line);padding:8px 14px;border-radius:999px}
+.header-actions{display:flex;align-items:center;gap:10px}.header-actions a{color:var(--green);border:1px solid var(--line2);background:var(--card);padding:9px 13px;border-radius:9px;text-decoration:none;font-size:12px;font-weight:800}.header-actions a:hover{border-color:var(--green)}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green-glow)}
 .dot.busy{background:var(--amber);box-shadow:0 0 8px rgba(242,201,76,.5)}
 
@@ -231,7 +232,7 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
 .favorite-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.favorite-list button{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid #506054;border-radius:8px;background:#17241c;color:#c9eaba;padding:8px 10px;cursor:pointer;font:11px 'Manrope',sans-serif}
 @media(max-width:600px){.control-grid{grid-template-columns:1fr}.worker-actions{grid-column:1/-1;justify-content:flex-start}.worker-meta{grid-column:1/-1;flex-wrap:wrap}}
 .preview-tools{position:absolute;left:10px;bottom:10px;display:flex;gap:6px;z-index:2}.preview-tools button{border:1px solid #61758b;border-radius:8px;background:rgba(8,16,25,.91);color:#e8f6ff;padding:9px 11px;font:800 12px 'Manrope',sans-serif;cursor:pointer}.preview-tools button.on{border-color:#a8f278;background:#23442a;color:#e6ffd8}.worker-preview.pick img{cursor:crosshair}.preview-hint{position:absolute;left:10px;top:10px;z-index:2;background:rgba(8,16,25,.88);border:1px solid #61758b;border-radius:8px;padding:7px 10px;color:#e8f6ff;font:700 11px 'Manrope',sans-serif;pointer-events:none}.worker-control .recorder{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}.worker-control .recorder button{padding:8px 10px;border:1px solid #465568;border-radius:8px;background:#182230;color:#d7e5f4;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-control .recorder .recording{border-color:#ff8d93;color:#ffb8bc;background:#39222a}.recorded-steps{margin:10px 0 0;padding-left:22px;color:#b9c8d9;font:11px 'Manrope',sans-serif}.recorded-steps li{padding:4px 0}.recorded-steps:empty::before{content:'Пока нет записанных действий';color:#73849a}
-.preview-typebar{position:absolute;left:10px;bottom:52px;z-index:3;display:flex;gap:6px;max-width:calc(100% - 20px);padding:8px;border:1px solid #61758b;border-radius:9px;background:rgba(8,16,25,.96)}.preview-typebar[hidden]{display:none}.preview-typebar input{width:min(300px,42vw);min-width:90px;padding:8px 10px;border:1px solid #61758b;border-radius:7px;background:#101722;color:#fff;font:13px 'Manrope',sans-serif}.preview-typebar button{border:1px solid #61758b;border-radius:7px;background:#263b29;color:#e6ffd8;padding:8px 10px;font:800 11px 'Manrope',sans-serif;cursor:pointer}
+.scenario-save{display:flex;gap:8px;align-items:center;margin-top:10px}.scenario-save[hidden]{display:none}.scenario-save input{flex:1;min-width:0;padding:9px 11px;border:1px solid #61758b;border-radius:8px;background:#101722;color:#fff}.scenario-save button{padding:9px 11px;border:1px solid var(--green);border-radius:8px;background:#263b29;color:#e6ffd8;font-weight:800;cursor:pointer}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.goal{align-items:stretch}.goal .pct{margin-left:0}.wrap{padding:22px 18px 45px}}
 @media(max-width:600px){header{align-items:flex-start}.brand h1{font-size:20px}.brand p{font-size:11px}.logo{width:48px;height:48px}.badge{font-size:10px;padding:9px 10px}.badge .dot{width:8px;height:8px}.goal{padding:24px}.goal .big{font-size:43px}.goal .pct{width:100%}.card{padding:20px}.totals{grid-template-columns:1fr 1fr}.tile:last-child{grid-column:span 2}.worker{flex-wrap:wrap}.worker .act{order:3;text-align:left;flex-basis:100%}}
 
@@ -279,7 +280,7 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
         <p>Вкладки, снимки и действия в одном месте</p>
       </div>
     </div>
-    <div class="badge"><span class="dot" id="connDot"></span><span id="connTxt">подключение…</span></div>
+    <div class="header-actions"><a href="/scenarios.html">Сценарии ↗</a><div class="badge"><span class="dot" id="connDot"></span><span id="connTxt">подключение…</span></div></div>
   </header>
 
   <div class="goal">
@@ -411,7 +412,7 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
 
 <script>
 const $ = id => document.getElementById(id);
-let ws, wsAlive = false, curJob = null, tick = 0, activePreviewCard = null;
+let ws, wsAlive = false, curJob = null, tick = 0, activePreviewCard = null, latestCpu = 0;
 const cpuSamples = [];
 window.addEventListener('pageshow', () => setTimeout(() => { if ($('url').value.trim().toLowerCase() === 'admin') $('url').value = ''; }, 100));
 
@@ -497,17 +498,26 @@ async function runAction(card, payload, options={}){
     });
     const data = await r.json();
     if(!options.quiet) toast(data.ok ? (payload.action==='inspect' ? 'Элемент выбран' : 'Действие выполнено') : (data.error || 'Действие не выполнено'),data.ok ? 'ok' : 'err');
-    if(data.ok && card.dataset.recording==='1' && options.record!==false && !['inspect','type'].includes(payload.action)){
-      card._steps.push(payload); renderSteps(card);
+    if(data.ok && card.dataset.recording==='1' && options.record!==false && payload.action!=='inspect'){
+      if(['type','fill'].includes(payload.action)){
+        if(card._steps.at(-1)?.action !== payload.action){
+          card._inputVarCount=(card._inputVarCount||0)+1;
+          card._steps.push({...payload,value:`{{input${card._inputVarCount}}}`});
+        }
+      }else card._steps.push(payload);
+      renderSteps(card);
     }
-    if(data.ok && payload.action!=='inspect' && options.refresh!==false) setTimeout(() => { if(card.isConnected) loadShot(card,true); }, payload.action === 'navigate' ? 2500 : 800);
+    if(data.ok && payload.action!=='inspect' && options.refresh!==false){
+      if(data.url) card.querySelector('.worker-url').textContent=data.url;
+      setTimeout(() => { if(card.isConnected) loadShot(card,true); }, 100);
+    }
     return data;
   }catch(e){ if(!options.quiet) toast('Ошибка управления: ' + e.message,'err'); return null; }
   finally{ run.disabled = false; }
 }
 
 function sendPreviewInput(card,payload){
-  card._inputChain=(card._inputChain || Promise.resolve()).then(() => runAction(card,payload,{quiet:true,record:false}));
+  card._inputChain=(card._inputChain || Promise.resolve()).then(() => runAction(card,payload,{quiet:true}));
   return card._inputChain;
 }
 function flushPreviewText(card){
@@ -560,18 +570,27 @@ $('workersPanel').addEventListener('wheel', e => {
 
 $('workersPanel').addEventListener('pointerdown', e => {
   if(!e.target.matches('.worker-preview img') || e.button!==0) return;
-  e.target.closest('.worker')._pointerStart = {x:e.clientX,y:e.clientY,id:e.pointerId};
+  e.target.closest('.worker')._pointerStart = {x:e.clientX,y:e.clientY,id:e.pointerId,type:e.pointerType};
+  e.target.setPointerCapture(e.pointerId);
 });
 $('workersPanel').addEventListener('pointerup', e => {
   if(!e.target.matches('.worker-preview img')) return;
   const card=e.target.closest('.worker'), start=card._pointerStart;
   card._pointerStart=null;
   if(!start || start.id!==e.pointerId || card.dataset.previewMode==='pick') return;
-  const dy=start.y-e.clientY;
-  if(Math.abs(dy)<12) return;
+  const dx=e.clientX-start.x, dy=e.clientY-start.y;
+  if(Math.hypot(dx,dy)<8) return;
   card._suppressClickUntil=Date.now()+300;
   const point=previewPoint(e.target,e.clientX,e.clientY);
-  queuePreviewScroll(card,dy * (e.target.naturalHeight/e.target.clientHeight),point);
+  if(start.type==='touch'){
+    queuePreviewScroll(card,-dy * (e.target.naturalHeight/e.target.clientHeight),point);
+    return;
+  }
+  const origin=previewPoint(e.target,start.x,start.y);
+  if(!origin || !point) return;
+  activePreviewCard=card;
+  card.querySelector('.preview-key-capture').focus();
+  sendPreviewInput(card,{action:'mouse_drag',...origin,end_x:point.x,end_y:point.y});
 });
 
 $('workersPanel').addEventListener('change', async e => {
@@ -585,6 +604,11 @@ $('workersPanel').addEventListener('change', async e => {
     loadShot(card,true);
   }
 });
+$('workersPanel').addEventListener('keydown', e => {
+  if(e.target.matches('.scenario-name') && e.key==='Enter'){
+    e.preventDefault(); e.target.closest('.scenario-save').querySelector('.scenario-save-confirm').click();
+  }
+});
 $('workersPanel').addEventListener('click', async e => {
   if(e.target.matches('.preview-expand')){
     const preview=e.target.closest('.worker-preview');
@@ -593,17 +617,12 @@ $('workersPanel').addEventListener('click', async e => {
     e.target.textContent=expanded ? '⤢ Свернуть' : '⛶ Развернуть';
     return;
   }
-  if(e.target.matches('.preview-up,.preview-down')){
-    const card=e.target.closest('.worker');
-    queuePreviewScroll(card,e.target.matches('.preview-up') ? -540 : 540,{x:0.5,y:0.5});
-    return;
-  }
   if(e.target.matches('.preview-pick')){
     const card=e.target.closest('.worker');
     card.dataset.previewMode = card.dataset.previewMode==='pick' ? '' : 'pick';
     card.querySelector('.worker-preview').classList.toggle('pick',card.dataset.previewMode==='pick');
     e.target.classList.toggle('on',card.dataset.previewMode==='pick');
-    card.querySelector('.preview-hint').textContent=card.dataset.previewMode==='pick' ? 'Нажми на элемент, чтобы выбрать его' : 'Кликни в поле и печатай · колесо для прокрутки';
+    card.querySelector('.preview-hint').textContent=card.dataset.previewMode==='pick' ? 'Нажми на элемент, чтобы выбрать его' : 'Клик — ввод · мышь — выделение · колесо — прокрутка';
     return;
   }
   if(e.target.matches('.worker-preview img')){
@@ -622,38 +641,39 @@ $('workersPanel').addEventListener('click', async e => {
     }
     return;
   }
-  if(e.target.matches('.preview-keyboard')){
-    const bar=e.target.closest('.worker-preview').querySelector('.preview-typebar');
-    bar.hidden=!bar.hidden;
-    if(!bar.hidden) bar.querySelector('input').focus();
+  if(e.target.matches('.record-save')){
+    const card=e.target.closest('.worker'), form=card.querySelector('.scenario-save');
+    form.hidden=!form.hidden;
+    if(!form.hidden) form.querySelector('input').focus();
     return;
   }
-  if(e.target.matches('.preview-type-send')){
-    const card=e.target.closest('.worker'), field=card.querySelector('.preview-typebar input');
-    if(field.value){ sendPreviewInput(card,{action:'type',value:field.value}); field.value=''; }
-    field.focus();
+  if(e.target.matches('.scenario-save-confirm')){
+    const card=e.target.closest('.worker'), name=card.querySelector('.scenario-name').value.trim();
+    if(!name){ toast('Назови сценарий','err'); return; }
+    if(!card._steps?.length){ toast('Сначала запиши хотя бы одно действие','err'); return; }
+    let saved=[];
+    try{ saved=JSON.parse(localStorage.getItem('katya_scenarios_v1')||'[]'); if(!Array.isArray(saved)) saved=[]; }catch{}
+    const id=crypto.randomUUID?.() || String(Date.now());
+    saved.unshift({id,name,startUrl:card._recordStartUrl || card.querySelector('.worker-url').textContent,steps:card._steps,createdAt:new Date().toISOString()});
+    try{ localStorage.setItem('katya_scenarios_v1',JSON.stringify(saved.slice(0,50))); }
+    catch{ toast('Не удалось сохранить сценарий','err'); return; }
+    card.querySelector('.scenario-save').hidden=true;
+    if(apiToken()){
+      const r=await apiFetch('/api/macros',{method:'POST',body:JSON.stringify({name,steps:card._steps,description:'scenario'})});
+      toast(r.ok ? 'Сценарий сохранён локально и как макрос на сервере' : 'Сценарий сохранён локально; на сервере: '+(r.error||'ошибка'), r.ok?'ok':'err');
+      if(r.ok) loadMacros();
+    } else toast('Сценарий сохранён · открой раздел «Сценарии»');
     return;
   }
-  if(e.target.matches('.preview-enter,.preview-tab,.preview-backspace')){
+  if(e.target.matches('.record-toggle,.record-replay,.record-copy,.record-clear')){
     const card=e.target.closest('.worker');
-    pressPreviewKey(card,e.target.matches('.preview-enter') ? 'Enter' : e.target.matches('.preview-tab') ? 'Tab' : 'Backspace');
-    return;
-  }
-  if(e.target.matches('.record-toggle,.record-replay,.record-copy,.record-clear,.record-save')){
-    const card=e.target.closest('.worker');
-    if(e.target.matches('.record-save')){
-        const steps=card._steps||[]; if(!steps.length){ toast('Сначала запиши шаги','err'); return; }
-        const name=prompt('Название макроса'); if(!name) return;
-        const r=await apiFetch('/api/macros',{method:'POST',body:JSON.stringify({name,steps})});
-        toast(r.ok ? 'Макрос сохранён' : (r.error||'Не удалось сохранить'), r.ok?'ok':'err'); if(r.ok) loadMacros();
-      return;
-    }
     if(e.target.matches('.record-toggle')){
       card.dataset.recording=card.dataset.recording==='1' ? '0' : '1';
+      if(card.dataset.recording==='1' && !card._steps?.length) card._recordStartUrl=card.querySelector('.worker-url').textContent || $('url').value.trim();
       e.target.classList.toggle('recording',card.dataset.recording==='1');
       e.target.textContent=card.dataset.recording==='1' ? '■ Остановить запись' : '● Записать шаги';
     }else if(e.target.matches('.record-clear')){
-      card._steps=[]; renderSteps(card);
+      card._steps=[]; card._inputVarCount=0; renderSteps(card);
     }else if(e.target.matches('.record-copy')){
       try{ await navigator.clipboard.writeText(JSON.stringify(card._steps||[],null,2)); toast('Шаги скопированы как JSON'); }catch{ toast('Не удалось скопировать','err'); }
     }else{
@@ -706,10 +726,6 @@ document.addEventListener('pointerdown', e => {
 document.addEventListener('keydown', e => {
   const preview=e.target.closest('.worker-preview');
   if(e.target.matches('.preview-key-capture') && e.key.length===1 && !e.ctrlKey && !e.metaKey && !e.altKey) return;
-  if(e.target.matches('.preview-typebar input')){
-    if(e.key==='Enter'){ e.preventDefault(); preview.querySelector('.preview-type-send').click(); }
-    return;
-  }
   if(e.target.closest('input,textarea,select,[contenteditable="true"]') && !e.target.matches('.preview-key-capture')) return;
   const card=preview?.closest('.worker') || activePreviewCard;
   if(!card?.isConnected) return;
@@ -765,7 +781,8 @@ setInterval(() => {
   for(const card of cards){
     if(now<(card._nextShotAt||0)) continue;
     loadShot(card,true);
-    card._nextShotAt=now+(card===focused ? 700 : 3500);
+    const activeInterval=latestCpu > 85 ? 2000 : latestCpu > 65 ? 1200 : 700;
+    card._nextShotAt=now+(card===focused ? activeInterval : latestCpu > 85 ? 8000 : 4000);
   }
 },250);
 
@@ -795,6 +812,7 @@ function escapeHtml(value){ return String(value).replace(/[&<>"']/g, c => ({'&':
 function renderSystem(system){
   if(!system) return;
   const cpu = Math.max(0,Math.min(100,Number(system.cpu_percent)||0));
+  latestCpu=cpu;
   cpuSamples.push(cpu); if(cpuSamples.length > 60) cpuSamples.shift();
   $('cpuValue').textContent = cpu.toFixed(1) + '%';
   $('ramValue').textContent = (Number(system.memory_percent)||0).toFixed(1) + '%';
@@ -847,9 +865,9 @@ function render(data){
       if(!card){
         card = document.createElement('div');
         card.className = 'worker'; card.dataset.id = w.id;
-        card.innerHTML = `<div class="worker-preview" tabindex="0"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми или прокрути" draggable="false" hidden><textarea class="preview-key-capture" aria-label="Клавиатура вкладки" autocomplete="off"></textarea><span class="preview-hint">Кликни в поле и печатай · колесо для прокрутки</span><div class="preview-typebar" hidden><input type="text" placeholder="Текст в выбранное поле" aria-label="Текст в выбранное поле" autocomplete="off"><button type="button" class="preview-type-send">Написать</button><button type="button" class="preview-enter">Enter</button><button type="button" class="preview-tab">Tab</button><button type="button" class="preview-backspace">⌫</button></div><div class="preview-tools"><button type="button" class="preview-up" title="Прокрутить вверх">↑ Вверх</button><button type="button" class="preview-down" title="↓ Вниз">↓ Вниз</button><button type="button" class="preview-keyboard">⌨ Ввод</button><button type="button" class="preview-pick">⌕ Выбрать элемент</button><button type="button" class="preview-expand">⛶ Развернуть</button></div><span class="shot-time">Ожидаю кадр…</span></div>
+        card.innerHTML = `<div class="worker-preview" tabindex="0"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми, выдели или прокрути" draggable="false" hidden><textarea class="preview-key-capture" aria-label="Клавиатура вкладки" autocomplete="off"></textarea><span class="preview-hint">Клик — ввод · мышь — выделение · колесо — прокрутка</span><div class="preview-tools"><button type="button" class="preview-pick">⌕ Выбрать элемент</button><button type="button" class="preview-expand">⛶ Развернуть</button></div><span class="shot-time">Ожидаю кадр…</span></div>
           <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
-          <div class="worker-actions"><button type="button" class="worker-shot">Обновить кадр</button><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
+          <div class="worker-actions"><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
           <div class="worker-url"></div>
           <details class="worker-control"><summary>Управление вкладкой · клик / ввод / перетаскивание</summary>
             <div class="control-grid">
@@ -859,7 +877,8 @@ function render(data){
               <input class="action-value" placeholder="Значение" aria-label="Значение" hidden>
             </div>
             <div class="control-help"></div><button type="button" class="worker-action-run">Выполнить действие</button>
-            <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><button type="button" class="record-replay">▶ Повторить</button><button type="button" class="record-copy">Копировать шаги</button><button type="button" class="record-clear">Очистить</button><button type="button" class="record-save">💾 Сохранить макрос</button><select class="macro-pick" aria-label="Запустить макрос"><option value="">▶ Макрос…</option></select></div>
+            <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><button type="button" class="record-replay">▶ Повторить</button><button type="button" class="record-save">Сохранить сценарий</button><button type="button" class="record-copy">Копировать шаги</button><button type="button" class="record-clear">Очистить</button><select class="macro-pick" aria-label="Запустить макрос"><option value="">▶ Макрос…</option></select></div>
+            <div class="scenario-save" hidden><input class="scenario-name" maxlength="80" placeholder="Название сценария" aria-label="Название сценария"><button type="button" class="scenario-save-confirm">Сохранить</button></div>
             <ol class="recorded-steps"></ol>
           </details>`;
         const img = card.querySelector('img');
