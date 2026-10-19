@@ -7,3 +7,6 @@ data/
 .venv/
 *.sqlite
 *.db
+web/node_modules/
+web/dist/
+schedules.json

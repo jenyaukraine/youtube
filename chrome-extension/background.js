@@ -1,5 +1,6 @@
 const PANEL_ORIGINS = new Set(['https://katya-dev.duckdns.org', 'http://127.0.0.1:8010', 'http://localhost:8010']);
 const MAX_EVENTS = 300;
+let eventQueue = Promise.resolve();
 const debugged = new Set();
 const viewports = new Map();
 
@@ -133,9 +134,14 @@ function domAction(step) {
   const el = find();
   if (!el) return {ok: false, error: 'Элемент не найден'};
   if (action === 'locate') {
+    el.scrollIntoView({block: 'center', inline: 'center', behavior: 'instant'});
     const rect = el.getBoundingClientRect();
     if (!rect.width || !rect.height) return {ok: false, error: 'Элемент не виден'};
-    return {ok: true, x: (rect.left + rect.width / 2) / innerWidth, y: (rect.top + rect.height / 2) / innerHeight};
+    const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return {ok: false, error: 'Элемент вне кадра'};
+    const hit = document.elementFromPoint(x, y);
+    if (hit && hit !== el && !el.contains(hit)) return {ok: false, error: 'Элемент перекрыт'};
+    return {ok: true, x: x / innerWidth, y: y / innerHeight};
   }
   if (action === 'point' || action === 'click') { el.click(); return {ok: true}; }
   if (action === 'dblclick') { el.dispatchEvent(new MouseEvent('dblclick', {bubbles: true, cancelable: true})); return {ok: true}; }
@@ -225,10 +231,12 @@ async function handle(command, payload = {}) {
   if (command === 'detach') { const s = await state(); await releaseDebugger(s.targetId); await chrome.storage.session.set({targetId: null, recording: false}); return {ok: true}; }
   if (command === 'record') {
     await targetTab();
+    if (!payload.enabled) await new Promise(resolve => setTimeout(resolve, 200));
+    await eventQueue;
     await chrome.storage.session.set({recording: Boolean(payload.enabled), ...(payload.enabled ? {events: []} : {})});
     return {ok: true, recording: Boolean(payload.enabled)};
   }
-  if (command === 'events') { const s = await state(); return {ok: true, events: s.events}; }
+  if (command === 'events') { await eventQueue; const s = await state(); return {ok: true, events: s.events}; }
   if (command === 'input') {
     const tab = await targetTab();
     if (!allowedTab(tab.url)) throw new Error('На странице входа Google действия выполняются вручную.');
@@ -277,6 +285,20 @@ async function handle(command, payload = {}) {
       await sendInput(tab.id, {type: 'up', x: step.end_x, y: step.end_y});
       return {ok: true};
     }
+    if (step.action === 'drag') {
+      if (!step.query || !step.value) return {ok: false, error: 'Укажи исходный и конечный селекторы'};
+      const locate = async query => {
+        const results = await chrome.scripting.executeScript({target: {tabId: tab.id}, func: domAction, args: [{action: 'locate', kind: step.kind, query}]});
+        return results[0]?.result;
+      };
+      const from = await locate(step.query), to = await locate(step.value);
+      if (!from?.ok || !to?.ok) return {ok: false, error: !from?.ok ? `Начало: ${from?.error || 'элемент не найден'}` : `Конец: ${to?.error || 'элемент не найден'}`};
+      await sendInput(tab.id, {type: 'move', x: from.x, y: from.y});
+      await sendInput(tab.id, {type: 'down', x: from.x, y: from.y});
+      for (let i = 1; i <= 12; i++) await sendInput(tab.id, {type: 'move', dragging: true, x: from.x + (to.x - from.x) * i / 12, y: from.y + (to.y - from.y) * i / 12});
+      await sendInput(tab.id, {type: 'up', x: to.x, y: to.y});
+      return {ok: true};
+    }
     if (step.action === 'press') return sendInput(tab.id, {type: 'key', key: String(step.value || ''), code: String(step.value || '')});
     const results = await chrome.scripting.executeScript({target: {tabId: tab.id}, func: domAction, args: [step]});
     return results[0]?.result || {ok: false, error: 'Нет ответа от вкладки'};
@@ -294,12 +316,12 @@ async function handle(command, payload = {}) {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.kind === 'record-event') {
-    (async () => {
+    eventQueue = eventQueue.then(async () => {
       const s = await state();
       if (!s.recording || sender.tab?.id !== s.targetId || !allowedTab(sender.tab?.url)) return;
       const events = [...s.events, {step: message.step, at: message.at}].slice(-MAX_EVENTS);
       await chrome.storage.session.set({events});
-    })();
+    }).catch(() => {});
     return;
   }
   if (message?.kind === 'dashboard') {
