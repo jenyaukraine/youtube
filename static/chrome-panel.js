@@ -8,7 +8,7 @@
   let draftActive = false;
   let shotBusy = false, shotUrgent = false, shotTimer = null, lastActivityAt = 0, dragging = false, lastMoveAt = 0;
   let inputQueue = Promise.resolve(), lastInputError = '';
-  let lastVideoTime = null, lastVideoAt = 0;
+  let lastVideoTime = null, lastVideoAt = 0, lastVisibilityAttempt = 0;
   let selectedStep = null, failedStep = null, media = null;
   let extensionDirectory = null;
 
@@ -197,10 +197,10 @@
   }
   async function refreshStatus() {
     const result = await bridge('status');
-    const needsUpdate = result.ok && result.version !== '0.6.0';
+    const needsUpdate = result.ok && result.version !== '0.6.1';
     const badge = $('bridgeStatus');
     badge.classList.toggle('err', !result.ok || needsUpdate);
-    badge.textContent = needsUpdate ? '● Обновите расширение до 0.6.0' : result.ok ? (result.tab ? '● Chrome подключён' : '● Расширение установлено') : '● Расширение не найдено';
+    badge.textContent = needsUpdate ? '● Обновите расширение до 0.6.1' : result.ok ? (result.tab ? '● Chrome подключён' : '● Расширение установлено') : '● Расширение не найдено';
     tab = needsUpdate ? null : result.tab || null;
     $('connectedTab').textContent = tab ? `${tab.title || 'Вкладка'} · ${tab.url}` : 'Вкладка не подключена';
     $('chromeDetach').disabled = !tab;
@@ -260,13 +260,14 @@
     lastVideoTime = video.currentTime;
     let text = moving ? `Видео играет · ${video.currentTime.toFixed(1)} с` : video.paused ? 'Видео на паузе — нажмите Play прямо в кадре' : video.readyState < 3 ? 'Плеер ждёт загрузки видео' : 'Проверяю воспроизведение…';
     if (!moving && !video.paused && now - lastVideoAt > 6000) text = 'Видео не движется';
-    if (visibility === 'hidden') text += ' · вкладка скрыта';
-    box.replaceChildren(document.createTextNode(text));
     if (visibility === 'hidden' && !moving && now - lastVideoAt > 6000) {
-      const button = document.createElement('button'); button.type = 'button'; button.textContent = 'Открыть в отдельном окне';
-      button.onclick = async () => { const r = await bridge('promote'); if (!r.ok) toast(r.error, 'err'); else { toast('Вкладка перенесена в отдельное окно'); shot(true); } };
-      box.append(button);
+      text += ' · восстанавливаю активность вкладки';
+      if (now - lastVisibilityAttempt > 10000) {
+        lastVisibilityAttempt = now;
+        bridge('keep-visible').then(reply => { if (!reply.ok) toast(reply.error || 'Не удалось активировать вкладку', 'err'); });
+      }
     }
+    box.replaceChildren(document.createTextNode(text));
     box.hidden = false;
   }
   async function shot(silent = false) {

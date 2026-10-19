@@ -27,7 +27,7 @@ API агентов по-прежнему принимает отдельный `
 Для сборки установщика Windows нужны Rust, pnpm, Python 3.11+ и зависимости проекта. Запустите
 `powershell -ExecutionPolicy Bypass -File scripts/build_desktop.ps1`. Готовый установщик будет в
 `web/src-tauri/target/release/bundle/nsis/`. Настольная версия запускает локальный Python-сервер и показывает тот же
-React интерфейс; для управления своим Chrome установите расширение версии 0.6.0 из панели.
+React интерфейс; для управления своим Chrome установите расширение версии 0.6.1 из панели.
 
 Установи Python 3.11+ с python.org (галочка «Add to PATH») и дважды кликни:
 
@@ -64,7 +64,7 @@ python3 app.py
 ```
 
 Переменные: `KATYA_PORT` (8010), `KATYA_BIND_HOST` (0.0.0.0), `KATYA_HEADLESS` (1), `KATYA_MAX_TABS` (8),
-`KATYA_DATA_DIR` (./data), `KATYA_API_TOKEN` (иначе генерируется), `KATYA_SCENARIO_DELAY` (1 с между загрузкой страницы и
+`KATYA_DATA_DIR` (./data), `KATYA_API_TOKEN` (иначе генерируется), `KATYA_MAX_MEMORY_PERCENT` (90%, запуск новых вкладок при большей загрузке памяти блокируется), `KATYA_SCENARIO_DELAY` (1 с между загрузкой страницы и
 первым шагом), `KATYA_LOW_MEMORY=1` для слабых VPS/ARM. Юнит systemd для VPS: `deploy/katya-viewbot.service`.
 
 ## Ядро: один формат шага для всего

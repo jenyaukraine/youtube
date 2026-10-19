@@ -85,6 +85,7 @@ export interface Job {
   workers_list: Worker[];
   scenario_steps?: Step[];
   control_token?: string;
+  launch_error?: string;
 }
 
 export interface TriggerWhen { kind: Kind | 'url'; query: string; role?: string }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Automation } from './components/Automation';
 import { StartForm } from './components/StartForm';
-import { TabCard } from './components/TabCard';
+import { WorkersPanel } from './components/WorkersPanel';
 import { ChromeWorkspace } from './components/ChromeWorkspace';
 import { ScenariosPage } from './pages/ScenariosPage';
 import { listMacros, localScenarios, ownedJob } from './lib/api';
@@ -47,10 +47,8 @@ export default function App() {
             <div className="card">
               <h2>Вкладки</h2>
               <details className="scenarios-inline"><summary>Сохранённые сценарии · {scenarios.length + macros.length}</summary><ScenariosPage scenarios={scenarios} macros={macros} onChanged={refreshScenarios} onMacrosChanged={refreshMacros} onStarted={() => undefined} /></details>
-              <div className="workers">
-                {tabs.length === 0 && <div className="empty">Нет активных вкладок.<br /><b>После запуска карточки появятся здесь.</b></div>}
-                {tabs.map(t => <TabCard key={t.worker.id} job={t.job} worker={t.worker} scenarios={scenarios} macros={macros} onScenariosChanged={() => { refreshScenarios(); refreshMacros(); }} />)}
-              </div>
+              <WorkersPanel tabs={tabs} scenarios={scenarios} macros={macros} memoryPercent={state.system.memory_percent}
+                onScenariosChanged={() => { refreshScenarios(); refreshMacros(); }} />
             </div>
           </div>}
           {mode === 'playwright' && <>
