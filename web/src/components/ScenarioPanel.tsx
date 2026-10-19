@@ -33,13 +33,15 @@ interface Props {
   onToggle: (i: number, shift: boolean) => void;
   onDelete: () => void;
   onUnpick: () => void;
+  onPatchStep: (index: number, step: Step) => void;
+  onRemoveStep: (index: number) => void;
   onCopy: () => void;
   onClear: () => void;
   onManual: (step: Step) => void;
 }
 
 const MANUAL_ACTIONS: { v: ActionName; t: string }[] = [
-  { v: 'click', t: 'Кликнуть' }, { v: 'wait_click', t: 'Ждать и кликнуть' }, { v: 'fill', t: 'Ввести текст' }, { v: 'hover', t: 'Навести мышь' },
+  { v: 'click', t: 'Кликнуть' }, { v: 'point', t: 'Клик по координатам' }, { v: 'wait_click', t: 'Ждать и кликнуть' }, { v: 'fill', t: 'Ввести текст' }, { v: 'hover', t: 'Навести мышь' },
   { v: 'drag', t: 'Перетащить' }, { v: 'scroll', t: 'Прокрутить' }, { v: 'press', t: 'Нажать клавишу' }, { v: 'navigate', t: 'Открыть URL' },
   { v: 'dblclick', t: 'Двойной клик' }, { v: 'type', t: 'Печатать по буквам' }, { v: 'select', t: 'Выбрать в списке' }, { v: 'wait_for', t: 'Ждать появления' },
   { v: 'wait_gone', t: 'Ждать исчезновения' }, { v: 'wait', t: 'Пауза (мс)' }, { v: 'text', t: 'Прочитать текст' }, { v: 'screenshot', t: 'Скриншот в файлы' }, { v: 'reload', t: 'Перезагрузить' },
@@ -88,9 +90,12 @@ export function ScenarioPanel(p: Props) {
   const [mKind, setMKind] = useState('css');
   const [mQuery, setMQuery] = useState('');
   const [mValue, setMValue] = useState('');
+  const [mX, setMX] = useState('');
+  const [mY, setMY] = useState('');
   const submitManual = () => {
+    if (mAction === 'point' && (!mX || !mY || Number(mX) < 0 || Number(mX) > 100 || Number(mY) < 0 || Number(mY) > 100)) return;
     const kind = (mKind.startsWith('role:') ? 'role' : mKind) as Kind;
-    p.onManual({ action: mAction, kind, role: mKind.startsWith('role:') ? mKind.slice(5) : 'button', query: mQuery, value: mValue });
+    p.onManual({ action: mAction, kind, role: mKind.startsWith('role:') ? mKind.slice(5) : 'button', query: mQuery, value: mValue, x: Number(mX) / 100, y: Number(mY) / 100 });
   };
 
   return (
@@ -143,10 +148,10 @@ export function ScenarioPanel(p: Props) {
         <button type="button" className="record-clear icon" title="Очистить запись" aria-label="Очистить запись" onClick={p.onClear}>🗑</button>
       </div>
       <div className="record-status" aria-live="polite">{p.statusText}</div>
-      <StepList steps={p.steps} from={p.from} picked={p.picked} onPickStart={p.onPickStart} onToggle={p.onToggle} onDelete={p.onDelete} onUnpick={p.onUnpick} />
+      <StepList steps={p.steps} from={p.from} picked={p.picked} onPickStart={p.onPickStart} onToggle={p.onToggle} onDelete={p.onDelete} onUnpick={p.onUnpick} onPatch={p.onPatchStep} onRemove={p.onRemoveStep} />
 
       <details className="manual-action">
-        <summary>Ручное действие по селектору · для точной настройки</summary>
+        <summary>Ручное действие · точная настройка</summary>
         <div className="control-grid">
           <select className="action-type" value={mAction} onChange={e => setMAction(e.target.value as ActionName)} aria-label="Действие">
             {MANUAL_ACTIONS.map(a => <option key={a.v} value={a.v}>{a.t}</option>)}
@@ -160,6 +165,7 @@ export function ScenarioPanel(p: Props) {
           )}
           {NEEDS_ELEMENT.has(mAction) && <input className="action-query" value={mQuery} onChange={e => setMQuery(e.target.value)} placeholder="Элемент: CSS, текст, роль или label" aria-label="Элемент" />}
           {NEEDS_VALUE.has(mAction) && <input className="action-value" value={mValue} onChange={e => setMValue(e.target.value)} placeholder={({ fill: 'Текст для ввода', drag: 'Цель перетаскивания', scroll: 'Пикселей, например 500', press: 'Клавиша: Enter, Escape', navigate: 'https://example.com', type: 'Текст по буквам', select: 'Значение option', wait: 'Миллисекунды', screenshot: 'Имя файла или full' } as Record<string, string>)[mAction] || 'Значение'} aria-label="Значение" />}
+          {mAction === 'point' && <><input className="action-x" type="number" min={0} max={100} step={0.1} value={mX} onChange={e => setMX(e.target.value)} placeholder="X, %" aria-label="Координата X, %" /><input className="action-y" type="number" min={0} max={100} step={0.1} value={mY} onChange={e => setMY(e.target.value)} placeholder="Y, %" aria-label="Координата Y, %" /></>}
         </div>
         <div className="control-help">Действие выполняется только в этой вкладке и записывается, если идёт запись.</div>
         <button type="button" className="worker-action-run" onClick={submitManual}>Выполнить действие</button>

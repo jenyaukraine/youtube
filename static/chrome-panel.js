@@ -10,6 +10,74 @@
   let inputQueue = Promise.resolve(), lastInputError = '';
   let lastVideoTime = null, lastVideoAt = 0;
   let selectedStep = null, failedStep = null, media = null;
+  let extensionDirectory = null;
+
+  function extensionStore() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('katya-extension-updater', 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('handles');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+  async function savedExtensionDirectory() {
+    const db = await extensionStore();
+    return new Promise((resolve, reject) => {
+      const request = db.transaction('handles').objectStore('handles').get('extension');
+      request.onsuccess = () => { resolve(request.result || null); db.close(); };
+      request.onerror = () => { reject(request.error); db.close(); };
+    });
+  }
+  async function rememberExtensionDirectory(handle) {
+    const db = await extensionStore();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction('handles', 'readwrite');
+      transaction.objectStore('handles').put(handle, 'extension');
+      transaction.oncomplete = () => { db.close(); resolve(); };
+      transaction.onerror = () => { db.close(); reject(transaction.error); };
+    });
+  }
+  savedExtensionDirectory().then(handle => { extensionDirectory = handle; }).catch(() => {});
+
+  $('chromeUpdateExtension').onclick = async () => {
+    const button = $('chromeUpdateExtension'), status = $('chromeUpdateStatus');
+    if (button.disabled) return;
+    try {
+      if (!window.showDirectoryPicker) throw new Error('Обновление папки доступно в Chrome.');
+      let handle = extensionDirectory;
+      if (!handle) handle = await window.showDirectoryPicker({id: 'katya-extension', mode: 'readwrite'});
+      else if ((await handle.requestPermission({mode: 'readwrite'})) !== 'granted') throw new Error('Нужен доступ к папке расширения.');
+      button.disabled = true;
+      status.textContent = 'Проверяю папку и загружаю обновление…';
+      const installed = JSON.parse(await (await (await handle.getFileHandle('manifest.json')).getFile()).text());
+      if (installed.name !== 'Katya Browser Bridge') {
+        extensionDirectory = null;
+        await rememberExtensionDirectory(null);
+        throw new Error('Выбрана другая папка. Нажмите кнопку снова и выберите папку Katya Browser Bridge.');
+      }
+      const response = await fetch('/api/extension-bundle', {cache: 'no-store'});
+      if (!response.ok) throw new Error('Не удалось получить обновление с сервера.');
+      const bundle = await response.json();
+      if (!bundle.ok || !bundle.files?.['manifest.json'] || !bundle.version) throw new Error('Неверный пакет обновления.');
+      for (const [name, contents] of Object.entries(bundle.files)) {
+        if (!/^[\w.-]+$/.test(name) || typeof contents !== 'string') throw new Error('Неверный файл в пакете обновления.');
+        const file = await handle.getFileHandle(name, {create: true});
+        const writer = await file.createWritable();
+        await writer.write(contents); await writer.close();
+      }
+      extensionDirectory = handle;
+      await rememberExtensionDirectory(handle);
+      const result = await bridge('reload-extension');
+      if (!result.ok) {
+        status.textContent = `Файлы версии ${bundle.version} установлены. Один раз нажмите «Обновить» на chrome://extensions.`;
+      } else {
+        status.textContent = `Версия ${bundle.version} установлена. Подключение восстанавливается…`;
+        setTimeout(refreshStatus, 1800);
+      }
+    } catch (error) {
+      if (error.name !== 'AbortError') status.textContent = error.message || 'Не удалось обновить расширение.';
+    } finally { button.disabled = false; }
+  };
 
   window.addEventListener('message', event => {
     if (event.source !== window || event.origin !== location.origin || event.data?.source !== 'katya-extension') return;
@@ -57,11 +125,31 @@
     if (selectedStep !== null) $('chromeSelectedStep').textContent = `Шаг ${selectedStep + 1} · ${stepLabel(source()?.steps?.[selectedStep] || {})}`;
     if (selectedStep !== null) $('chromeScenarioNow').textContent = `Начать с шага ${selectedStep + 1}: ${stepLabel(source()?.steps?.[selectedStep] || {})}`;
     $('chromeReplay').textContent = selectedStep === null ? '▶ Повторить' : `▶ С шага ${selectedStep + 1}`;
+    BrowserCore.renderStepEditor($('chromeStepEditor'), selectedStep === null ? null : source()?.steps?.[selectedStep], selectedStep, next => updateSelectedStep(steps => { steps[selectedStep] = next; }), () => updateSelectedStep(steps => { steps.splice(selectedStep, 1); }));
+    BrowserCore.mountStepEditor($('chromeStepList'), $('chromeStepEditor'), selectedStep);
     showScenarioButton();
+  }
+  function updateSelectedStep(change) {
+    const current = source(); if (!current?.steps?.length) return;
+    const steps = structuredClone(current.steps); change(steps);
+    const choice = $('startScenario').value;
+    if (draftActive || !choice.startsWith('scenario:')) {
+      recorded = steps; draftActive = true;
+      if (!choice.startsWith('scenario:')) toast('Изменённая копия готова. Нажми «Сохранить» для нового сценария.');
+    } else {
+      const items = scenarios(), item = items.find(s => s.id === choice.slice(9));
+      if (item) { item.steps = steps; localStorage.setItem(STORE, JSON.stringify(items)); fillStartScenario(); $('startScenario').value = choice; fillMacroPick($('chromeMacroPick')); }
+    }
+    const nextIndex = selectedStep;
+    showScenario();
+    if (steps.length && nextIndex !== null) selectStep(Math.min(nextIndex, steps.length - 1));
+    runState('Шаг изменён и сохранён', 'ok');
   }
   function showScenario() {
     const steps = source()?.steps || [];
     selectedStep = null; failedStep = null; $('chromeStepActions').hidden = true;
+    BrowserCore.mountStepEditor($('chromeStepList'), $('chromeStepEditor'), null);
+    BrowserCore.renderStepEditor($('chromeStepEditor'), null);
     $('chromeStepCount').textContent = `${steps.length} шагов`;
     $('chromeScenarioSummary').hidden = !steps.length;
     $('chromeScenarioStatus').textContent = steps.length ? `Готов к запуску · 0/${steps.length}` : '';
@@ -71,7 +159,20 @@
     $('chromeRecordedList').hidden = true;
     BrowserCore.renderChips($('chromeStepChips'), steps, stepLabel);
     renderSteps(steps, $('chromeStepList'));
+    BrowserCore.renderLibrary(panel.querySelector('.scenario-library-list'), [
+      ...scenarios().filter(item => item.steps?.length).map(item => ({...item, choice:`scenario:${item.id}`})),
+      ...MACROS.filter(item => !scenarios().some(local => local.name === item.name)).map(item => ({...item, choice:`macro:${item.name}`}))
+    ], item => { draftActive=false; recorded=[]; $('startScenario').value=item.choice; applyScenarioSettings(); showScenario(); panel.querySelector('.scenario-library').open=false; },
+    item => deleteScenarioChoice(item.choice, item),
+    (item,name) => { const items=scenarios(); const found=items.find(s=>s.id===item.id); if(found){found.name=name;localStorage.setItem(STORE,JSON.stringify(items));fillStartScenario();showScenario();} });
     showScenarioButton();
+  }
+  async function deleteScenarioChoice(choice, item) {
+    if (!confirm(`Удалить сценарий «${item.name}»?`)) return;
+    if (choice.startsWith('scenario:')) localStorage.setItem(STORE,JSON.stringify(scenarios().filter(s=>s.id!==item.id)));
+    else { const result=await apiFetch(`/api/macros/${encodeURIComponent(item.name)}`,{method:'DELETE'}); if(!result.ok){toast(result.error||'Не удалось удалить','err');return;} await loadMacros(); }
+    if($('startScenario').value===choice){$('startScenario').value='';draftActive=false;recorded=[];}
+    fillStartScenario(); fillMacroPick($('chromeMacroPick')); showScenario(); toast('Сценарий удалён');
   }
   function runState(text, status = '') { $('chromeRunState').textContent = text; $('chromeRunState').className = 'record-status ' + status; }
   function setMode() {
@@ -80,7 +181,6 @@
     $('chromeSetup').hidden = !chromeMode;
     $('chromeWorkspace').hidden = !chromeMode;
     $('serverWorkspace').hidden = chromeMode;
-    $('goalPanel').hidden = chromeMode;
     $('logBox').hidden = chromeMode;
     $('autoCard').hidden = chromeMode;
     document.querySelectorAll('.server-only').forEach(el => el.hidden = chromeMode);
@@ -97,10 +197,10 @@
   }
   async function refreshStatus() {
     const result = await bridge('status');
-    const needsUpdate = result.ok && result.version !== '0.4.0';
+    const needsUpdate = result.ok && result.version !== '0.5.1';
     const badge = $('bridgeStatus');
     badge.classList.toggle('err', !result.ok || needsUpdate);
-    badge.textContent = needsUpdate ? '● Обновите расширение до 0.4.0' : result.ok ? (result.tab ? '● Chrome подключён' : '● Расширение установлено') : '● Расширение не найдено';
+    badge.textContent = needsUpdate ? '● Обновите расширение до 0.5.1' : result.ok ? (result.tab ? '● Chrome подключён' : '● Расширение установлено') : '● Расширение не найдено';
     tab = needsUpdate ? null : result.tab || null;
     $('connectedTab').textContent = tab ? `${tab.title || 'Вкладка'} · ${tab.url}` : 'Вкладка не подключена';
     $('chromeDetach').disabled = !tab;
@@ -111,7 +211,6 @@
       $('chromeMediaState').hidden = true;
       $('chromeVideoControls').hidden = true; media = null;
     } else if ($('chromeShotImage').hidden && !shotBusy) shot(true);
-    if ($('launchMethod').value === 'chrome') $('heroWorkers').textContent = tab ? '1' : '0';
     if ((!result.ok || needsUpdate) && $('launchMethod').value === 'chrome') $('chromeSetup').querySelector('.chrome-install').open = true;
     if (result.ok) {
       recording = !!result.recording;
@@ -199,7 +298,7 @@
   function wakeShot() {
     lastActivityAt = Date.now();
     if (shotBusy) shotUrgent = true;
-    else { clearTimeout(shotTimer); shotTimer = setTimeout(() => shot(true), 40); }
+    else { clearTimeout(shotTimer); shotTimer = setTimeout(() => shot(true), 0); }
   }
   function substitute(step, scenario) {
     const vars = scenario.variables || {};
@@ -329,7 +428,7 @@
   function release(event) {
     if (!dragging || !interactive()) return;
     event.preventDefault(); dragging = false;
-    input({type: 'up', ...coordinates(event)}).then(() => setTimeout(() => shot(true), 120));
+    input({type: 'up', ...coordinates(event)}).then(() => shot(true));
   }
   frame.addEventListener('pointerup', release);
   frame.addEventListener('pointercancel', release);
@@ -337,22 +436,21 @@
     if (!interactive()) return;
     event.preventDefault();
     const scale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? innerHeight : 1;
-    input({type: 'wheel', ...coordinates(event), deltaX: event.deltaX * scale, deltaY: event.deltaY * scale}).then(() => setTimeout(() => shot(true), 140));
+    input({type: 'wheel', ...coordinates(event), deltaX: event.deltaX * scale, deltaY: event.deltaY * scale}).then(() => shot(true));
   }, {passive: false});
   frame.addEventListener('keydown', event => {
     if (!interactive() || event.isComposing) return;
     event.preventDefault();
     const modifiers = (event.altKey ? 1 : 0) | (event.ctrlKey ? 2 : 0) | (event.metaKey ? 4 : 0) | (event.shiftKey ? 8 : 0);
-    if (event.key.length === 1 && !(event.altKey || event.ctrlKey || event.metaKey)) input({type: 'text', text: event.key});
-    else input({type: 'key', key: event.key, code: event.code, modifiers});
-    setTimeout(() => shot(true), 160);
+    if (event.key.length === 1 && !(event.altKey || event.ctrlKey || event.metaKey)) input({type: 'text', text: event.key}).then(() => shot(true));
+    else input({type: 'key', key: event.key, code: event.code, modifiers}).then(() => shot(true));
   });
   frame.addEventListener('paste', event => {
     if (!interactive()) return;
-    event.preventDefault(); input({type: 'text', text: event.clipboardData?.getData('text/plain') || ''}).then(() => setTimeout(() => shot(true), 160));
+    event.preventDefault(); input({type: 'text', text: event.clipboardData?.getData('text/plain') || ''}).then(() => shot(true));
   });
   $('chromeDetach').onclick = async () => { const r = await bridge('detach'); if (!r.ok) toast(r.error, 'err'); await refreshStatus(); };
-  $('chromeStepList').addEventListener('click', event => { const li = event.target.closest('li[data-step-index]'); if (li && !playing) selectStep(Number(li.dataset.stepIndex)); });
+  $('chromeStepList').addEventListener('click', event => { if (event.target.closest('.scenario-step-editor')) return; const li = event.target.closest('li[data-step-index]'); if (li && !playing) selectStep(Number(li.dataset.stepIndex)); });
   $('chromeStepList').addEventListener('keydown', event => { if (['Enter', ' '].includes(event.key)) { event.preventDefault(); event.target.click(); } });
   $('chromeStepChips').addEventListener('click', event => { const li = event.target.closest('li[data-step-index]'); if (li && !playing) selectStep(Number(li.dataset.stepIndex)); });
   $('chromeRunFrom').onclick = start;
@@ -370,13 +468,16 @@
   function updateManualFields() {
     const action = $('chromeManualAction').value;
     $('chromeManualValue').hidden = !['fill','type','drag','scroll','press','navigate','select','wait','screenshot'].includes(action);
-    $('chromeManualQuery').hidden = ['navigate','reload','back','wait','press','screenshot'].includes(action);
+    $('chromeManualQuery').hidden = ['navigate','reload','back','wait','press','screenshot','point'].includes(action);
     $('chromeManualKind').hidden = $('chromeManualQuery').hidden;
+    $('chromeManualX').hidden = action !== 'point';
+    $('chromeManualY').hidden = action !== 'point';
   }
   $('chromeManualAction').addEventListener('change', updateManualFields);
   updateManualFields();
   $('chromeManualRun').onclick = async () => {
-    const step = {action: $('chromeManualAction').value, kind: $('chromeManualKind').value, query: $('chromeManualQuery').value.trim(), value: $('chromeManualValue').value.trim()};
+    const step = {action: $('chromeManualAction').value, kind: $('chromeManualKind').value, query: $('chromeManualQuery').value.trim(), value: $('chromeManualValue').value.trim(), x:Number($('chromeManualX').value)/100, y:Number($('chromeManualY').value)/100};
+    if(step.action === 'point' && (!$('chromeManualX').value.trim() || !$('chromeManualY').value.trim() || !Number.isFinite(step.x) || !Number.isFinite(step.y) || step.x < 0 || step.x > 1 || step.y < 0 || step.y > 1)){toast('Укажи координаты от 0 до 100%', 'err');return;}
     if (['click', 'wait_click', 'fill', 'type', 'hover', 'dblclick', 'select', 'wait_for', 'wait_gone', 'text'].includes(step.action) && !step.query) { toast('Укажи элемент', 'err'); return; }
     if (step.action === 'screenshot') { await shot(); runState('Кадр обновлён'); return; }
     if (step.action === 'wait') { await pause(Math.min(60000, Math.max(0, Number(step.value) || 0))); return; }
@@ -424,6 +525,12 @@
   $('chromeReplay').onclick = () => { if (playing) return stop(); start(); };
   $('chromeCopy').onclick = async () => { try { await navigator.clipboard.writeText(JSON.stringify(source()?.steps || [], null, 2)); toast('Шаги скопированы'); } catch { toast('Не удалось скопировать', 'err'); } };
   $('chromeClear').onclick = () => { recorded = []; draftActive = false; $('chromeRecordedList').replaceChildren(); showScenario(); runState('Запись очищена'); };
+  panel.querySelector('.record-delete-scenario').onclick = async () => {
+    const choice = $('startScenario').value, current = source();
+    if (!current?.steps?.length) { toast('Сценарий не выбран', 'err'); return; }
+    if(draftActive){if(!confirm('Удалить текущую запись?')) return;recorded=[];draftActive=false;showScenario();toast('Запись удалена');return;}
+    await deleteScenarioChoice(choice,current);
+  };
   $('chromeUnselect').onclick = () => { if (selectedStep !== null) selectStep(selectedStep); panel.querySelector('.recorder-more').open = false; };
   $('chromeMacroPick').addEventListener('change', event => {
     if (!event.target.value) return;

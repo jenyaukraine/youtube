@@ -169,12 +169,30 @@ function domAction(step) {
   return {ok: false, error: `Действие ${action} пока не поддерживается расширением`};
 }
 
+function restoreScroll(scrollState) {
+  if (!scrollState || typeof scrollState !== 'object') return false;
+  const number = value => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+  window.scrollTo({left: number(scrollState.x), top: number(scrollState.y), behavior: 'instant'});
+  for (const item of (Array.isArray(scrollState.targets) ? scrollState.targets : []).slice(0, 6).reverse()) {
+    if (!item || typeof item.query !== 'string') continue;
+    try {
+      const el = document.querySelector(item.query);
+      if (el) el.scrollTo({left: number(item.left), top: number(item.top), behavior: 'instant'});
+    } catch {}
+  }
+  return true;
+}
+
 async function handle(command, payload = {}) {
   if (command === 'status') {
     const s = await state();
     let tab = null;
     if (s.targetId) { try { const t = await chrome.tabs.get(s.targetId); tab = {id: t.id, title: t.title, url: t.url}; } catch {} }
     return {ok: true, version: chrome.runtime.getManifest().version, tab, recording: s.recording, events: s.events.length};
+  }
+  if (command === 'reload-extension') {
+    setTimeout(() => chrome.runtime.reload(), 200);
+    return {ok: true};
   }
   if (command === 'tabs') {
     const tabs = await chrome.tabs.query({});
@@ -262,11 +280,15 @@ async function handle(command, payload = {}) {
       return {ok: false, error: 'Адрес не появился вовремя'};
     }
     if (['point', 'click', 'dblclick', 'hover'].includes(step.action)) {
+      if (step.scroll_state) {
+        await chrome.scripting.executeScript({target: {tabId: tab.id}, func: restoreScroll, args: [step.scroll_state]});
+      }
       let point = null;
       if (step.query) {
         const results = await chrome.scripting.executeScript({target: {tabId: tab.id}, func: domAction, args: [{...step, action: 'locate'}]});
         if (results[0]?.result?.ok) point = results[0].result;
       }
+      if (!point && step.scroll_state && step.query) await chrome.scripting.executeScript({target: {tabId: tab.id}, func: restoreScroll, args: [step.scroll_state]});
       if (!point && ['point', 'hover'].includes(step.action) && Number.isFinite(Number(step.x)) && Number.isFinite(Number(step.y))) point = step;
       if (!point) return {ok: false, error: 'Элемент не найден'};
       await sendInput(tab.id, {type: 'move', x: point.x, y: point.y});

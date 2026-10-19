@@ -7,8 +7,6 @@ import { listMacros, localScenarios, ownedJob } from './lib/api';
 import { useLive } from './lib/live';
 import type { Macro, Scenario } from './lib/types';
 
-type Page = 'tabs' | 'scenarios';
-
 function Toast() {
   const [t, setT] = useState<{ msg: string; type: string } | null>(null);
   const timer = useRef<number>();
@@ -20,15 +18,13 @@ function Toast() {
 }
 
 export default function App() {
-  const { state, online } = useLive();
-  const [page, setPage] = useState<Page>(() => (location.hash === '#scenarios' ? 'scenarios' : 'tabs'));
+  const { state } = useLive();
   const [scenarios, setScenarios] = useState<Scenario[]>(localScenarios());
   const [macros, setMacros] = useState<Macro[]>([]);
   const cpu = useRef<number[]>([]);
   const refreshMacros = useCallback(async () => { const r = await listMacros(); setMacros(r.macros || []); }, []);
   const refreshScenarios = useCallback(() => setScenarios(localScenarios()), []);
   useEffect(() => { refreshMacros(); }, [refreshMacros]);
-  useEffect(() => { location.hash = page === 'scenarios' ? '#scenarios' : ''; }, [page]);
 
   const running = state.jobs.filter(j => j.status === 'running');
   const tabs = running.flatMap(j => j.workers_list.filter(w => w.state !== 'stopped').map(w => ({ job: j, worker: w })));
@@ -45,24 +41,14 @@ export default function App() {
           <div className="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#8fe3a2" strokeWidth="2" strokeLinecap="round"><path d="M3 12h4l2-7 4 14 2-7h6" /></svg></div>
           <div><h1>Katya <span>Browser Lab</span></h1><p>Вкладки, сценарии и действия в одном месте</p></div>
         </div>
-        <div className="header-actions">
-          <a href="#" onClick={e => { e.preventDefault(); setPage(page === 'tabs' ? 'scenarios' : 'tabs'); }}>{page === 'tabs' ? 'Сценарии ↗' : '← Вкладки'}</a>
-          <div className="badge"><span className={'dot' + (running.length ? ' busy' : '')} /><span>{running.length ? 'работает' : online ? 'онлайн' : 'переподключение…'}</span></div>
-        </div>
       </header>
 
-      {page === 'scenarios' ? (
-        <ScenariosPage scenarios={scenarios} onChanged={refreshScenarios} onStarted={() => setPage('tabs')} />
-      ) : (
-        <>
-          <div className="goal">
-            <div><div className="lbl">Открыто вкладок</div><div className="big">{tabs.length}</div></div>
-            <div className="pct"><div className="activity-label">Ошибок</div><div className="activity-value">{errors}</div><div className="activity-sub">CPU {state.system.cpu_percent}% · RAM {state.system.memory_percent}%</div></div>
-          </div>
+      <>
           <div className="grid">
             <StartForm jobs={state.jobs} scenarios={scenarios} macros={macros} ownJob={own} />
             <div className="card">
               <h2>Вкладки</h2>
+              <details className="scenarios-inline"><summary>Сохранённые сценарии · {scenarios.length + macros.length}</summary><ScenariosPage scenarios={scenarios} macros={macros} onChanged={refreshScenarios} onMacrosChanged={refreshMacros} onStarted={() => undefined} /></details>
               <div className="workers">
                 {tabs.length === 0 && <div className="empty">Нет активных вкладок.<br /><b>После запуска карточки появятся здесь.</b></div>}
                 {tabs.map(t => <TabCard key={t.worker.id} job={t.job} worker={t.worker} scenarios={scenarios} macros={macros} onScenariosChanged={() => { refreshScenarios(); refreshMacros(); }} />)}
@@ -84,8 +70,7 @@ export default function App() {
           </div>
           <div className="log">{state.log.slice(-60).map((l, i) => <div className="l" key={i}>{l}</div>)}</div>
           <Automation jobs={state.jobs} triggers={state.triggers || []} macros={macros} onMacrosChanged={refreshMacros} />
-        </>
-      )}
+      </>
       <footer>Katya <b>Browser Lab</b> · React · <a href="/legacy/" style={{ color: 'inherit' }}>старая панель</a></footer>
       <Toast />
     </div>

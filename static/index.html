@@ -29,7 +29,7 @@
         <p>Вкладки, снимки и действия в одном месте</p>
       </div>
     </div>
-    <div class="header-actions"><a href="/scenarios.html">Сценарии ↗</a><div class="badge"><span class="dot" id="connDot"></span><span id="connTxt">подключение…</span></div></div>
+    <div class="header-actions"><div class="badge"><span class="dot" id="connDot"></span><span id="connTxt">подключение…</span></div></div>
   </header>
 
   <div class="goal" id="goalPanel">
@@ -59,7 +59,7 @@
       <div id="chromeSetup" hidden>
         <div class="chrome-connection"><span id="bridgeStatus">Проверяю расширение…</span><span id="connectedTab">Вкладка не подключена</span></div>
         <details class="chrome-existing" id="chromeTabPicker"><summary>Подключить открытую вкладку</summary><div id="chromeTabList">Ищу вкладки…</div></details>
-        <details class="chrome-install"><summary>Установка и обновление расширения</summary><ol><li><a href="/Katya-Browser-Bridge.zip" download>Скачать ZIP расширения ↗</a> и распаковать.</li><li>Открыть <code>chrome://extensions</code>, включить режим разработчика и загрузить распакованную папку. Если расширение уже установлено, заменить файлы в его папке и нажать «Обновить».</li><li>Войти в аккаунт вручную, открыть вкладку и нажать значок расширения → «Подключить эту вкладку».</li></ol></details>
+        <details class="chrome-install"><summary>Установка и обновление расширения</summary><button type="button" id="chromeUpdateExtension" class="chrome-update-button">Обновить расширение</button><div id="chromeUpdateStatus" class="hint">При первом обновлении выберите папку уже установленного расширения. Потом достаточно этой кнопки.</div><ol><li>При первой установке <a href="/Katya-Browser-Bridge.zip" download>скачайте ZIP ↗</a>, распакуйте и загрузите папку через <code>chrome://extensions</code>.</li><li>Если старое расширение не перезапустилось автоматически, один раз нажмите «Обновить» на <code>chrome://extensions</code>. Следующие обновления запускаются кнопкой выше.</li><li>Войдите в аккаунт вручную, откройте вкладку и нажмите значок расширения → «Подключить эту вкладку».</li></ol></details>
       </div>
       <div class="server-only">
       <label>Потоков (параллельных окон)</label>
@@ -239,6 +239,8 @@ function updateActionFields(card){
   card.querySelector('.action-kind').hidden = !needsElement;
   card.querySelector('.action-query').hidden = !needsElement;
   card.querySelector('.action-value').hidden = !needsValue;
+  card.querySelector('.action-x').hidden = action !== 'point';
+  card.querySelector('.action-y').hidden = action !== 'point';
   card.querySelector('.action-query').placeholder = 'Элемент: CSS, текст, роль или label';
   card.querySelector('.action-value').placeholder = ({fill:'Текст для ввода',drag:'Цель перетаскивания (тем же способом поиска)',scroll:'Прокрутка в пикселях, например 500',press:'Клавиша, например Enter или Escape',navigate:'https://example.com',type:'Текст, печатается по буквам',select:'Значение option',wait:'Миллисекунды, например 1500',screenshot:'Имя файла (пусто = shot) или full'})[action] || '';
   card.querySelector('.control-help').textContent = action === 'wait_click' ? 'Ждёт появления элемента до 2 минут и нажимает один раз.' : action === 'click' ? 'Можно также нажать прямо на скриншот. Для точного выбора укажи CSS, текст, роль или label.' : 'Действие выполняется только в этой вкладке. После него кадр обновится.';
@@ -303,13 +305,14 @@ function renderSteps(card){
 }
 const ACTION_LABELS={scroll:'Прокрутка',point:'Клик',type:'Ввод',press:'Клавиша',click:'Клик',fill:'Заполнение',wait:'Пауза',navigate:'Переход',screenshot:'Снимок',mouse_drag:'Перетаскивание'};
 function renderScenario(card,worker){
-  const pane=card.querySelector('.scenario-progress'),steps=worker._j.scenario_steps||[],status=worker.scenario||{};
+  const pane=card.querySelector('.scenario-progress'),steps=card._scenarioEdited && card._scenarioId===worker._j.id ? card._steps : worker._j.scenario_steps||[],status=worker.scenario||{};
   card._scenarioSteps=steps;
   card.querySelector('.scenario-total').textContent=steps.length?`${steps.length} шагов`:'';
   pane.hidden=!steps.length;
   if(!steps.length || card._clientRun) return;
   if(card._scenarioId!==worker._j.id){
     card._scenarioId=worker._j.id;
+    card._scenarioEdited=false;
     BrowserCore.renderTimeline(card.querySelector('.scenario-detail-list'),steps,describeStep);
     BrowserCore.renderChips(card.querySelector('.scenario-steps'),steps,describeStep);
   }
@@ -362,6 +365,8 @@ function updateScenarioPauseCountdown(card){
 }
 function clearScenarioPick(card){
   card._scenarioPick=null; card._playFrom=0; renderSteps(card);
+  BrowserCore.mountStepEditor(card.querySelector('.scenario-detail-list'),card.querySelector('.scenario-step-editor'),null);
+  BrowserCore.renderStepEditor(card.querySelector('.scenario-step-editor'),null);
   const bar=card.querySelector('.scenario-action'); bar.hidden=true; delete bar.dataset.mode; card.querySelector('.scenario-run').textContent='▶ Запустить отсюда';
   card.querySelectorAll('.scenario-steps li.picked').forEach(el=>el.classList.remove('picked'));
 }
@@ -455,7 +460,7 @@ async function runAction(card, payload, options={}){
         card._lastRecordedInputType=inputType;
       }else{
         card._lastRecordedInputType=null;
-        card._steps.push(payload.action==='fill' && data.input_focus?.type==='password' ? {...payload,value:'{{password}}'} : payload);
+        card._steps.push(payload.action==='fill' && data.input_focus?.type==='password' ? {...payload,value:'{{password}}'} : payload.action==='point' ? {...payload,query:data.selector||payload.query,scroll_state:data.scroll_state||payload.scroll_state} : payload);
       }
       renderSteps(card);
       persistDraft(card);
@@ -463,7 +468,7 @@ async function runAction(card, payload, options={}){
     }
     if(data.ok && payload.action!=='inspect' && options.refresh!==false){
       if(data.url) card.querySelector('.worker-url').textContent=data.url;
-      setTimeout(() => { if(card.isConnected) loadShot(card,true); }, 100);
+      if(card.isConnected) loadShot(card,true);
     }
     return data;
   }catch(e){ if(!options.quiet) toast('Ошибка управления: ' + e.message,'err'); return null; }
@@ -596,12 +601,59 @@ $('workersPanel').addEventListener('change', async e => {
       :MACROS.find(m=>m.name===choice.slice(6));
     if(!source?.steps?.length){toast('Запись не найдена','err');return;}
     card._steps=structuredClone(source.steps);
+    card._loadedScenarioChoice=choice;
     card._recordStartUrl=source.startUrl||card.dataset.startUrl;
     renderSteps(card);persistDraft(card);
     toast(`Загружено шагов: ${card._steps.length}. Нажми «Повторить» для запуска.`);
   }
 });
+function editWorkerScenarioStep(card,index,next,remove=false){
+  const steps=structuredClone(card._steps||[]);
+  if(remove) steps.splice(index,1); else steps[index]=next;
+  card._steps=steps; card._scenarioSteps=steps; card._scenarioEdited=true;
+  if(steps.length) persistDraft(card); else forgetDraft(card);
+  renderSteps(card);
+  const list=card.querySelector('.scenario-detail-list'),editor=card.querySelector('.scenario-step-editor');
+  BrowserCore.mountStepEditor(list,editor,null);
+  BrowserCore.renderTimeline(list,steps,describeStep);
+  BrowserCore.renderChips(card.querySelector('.scenario-steps'),steps,describeStep);
+  card.querySelector('.scenario-total').textContent=`${steps.length} шагов`;
+  card._scenarioPick=null;
+  if(steps.length){ card.querySelectorAll('.scenario-steps li')[Math.min(index,steps.length-1)]?.click(); }
+  else clearScenarioPick(card);
+  toast(remove?'Шаг удалён':'Шаг изменён. Сохрани сценарий, чтобы обновить запись.');
+}
+function renderWorkerLibrary(card){
+  const list=card.querySelector('.scenario-library-list'); if(!list) return;
+  const entries=[...localList(SCENARIO_STORE).filter(s=>s.steps?.length).map(s=>({...s,choice:`scenario:${s.id}`})),...MACROS.map(m=>({...m,choice:`macro:${m.name}`}))];
+  BrowserCore.renderLibrary(list,entries,item=>{
+    card._steps=structuredClone(item.steps); card._loadedScenarioChoice=item.choice;
+    card._recordStartUrl=item.startUrl||item.start_url||card.dataset.startUrl;
+    card._scenarioEdited=true; renderSteps(card); persistDraft(card);
+    card.querySelector('.scenario-library').open=false;
+    toast(`Загружен сценарий «${item.name}»`);
+  },async item=>{
+    if(!confirm(`Удалить сценарий «${item.name}»?`)) return;
+    if(item.choice.startsWith('scenario:')) localStorage.setItem(SCENARIO_STORE,JSON.stringify(localList(SCENARIO_STORE).filter(s=>s.id!==item.id)));
+    else {const result=await apiFetch(`/api/macros/${encodeURIComponent(item.name)}`,{method:'DELETE'});if(!result.ok){toast(result.error||'Не удалось удалить','err');return;}await loadMacros();}
+    if(card._loadedScenarioChoice===item.choice){card._loadedScenarioChoice='';card._steps=[];forgetDraft(card);renderSteps(card);}
+    document.querySelectorAll('#workersPanel .worker').forEach(renderWorkerLibrary);
+    document.querySelectorAll('.macro-pick').forEach(fillMacroPick);fillStartScenario();toast('Сценарий удалён');
+  },(item,name)=>{
+    const items=localList(SCENARIO_STORE),found=items.find(s=>s.id===item.id);
+    if(found){found.name=name;localStorage.setItem(SCENARIO_STORE,JSON.stringify(items));document.querySelectorAll('#workersPanel .worker').forEach(renderWorkerLibrary);document.querySelectorAll('.macro-pick').forEach(fillMacroPick);fillStartScenario();}
+  });
+}
 $('workersPanel').addEventListener('click', async e => {
+  if(e.target.closest('.scenario-step-editor')) return;
+  if(e.target.closest('.worker-tile')){
+    const card=e.target.closest('.worker');
+    const collapsed=card.classList.toggle('collapsed');
+    card.querySelector('.worker-tile').setAttribute('aria-expanded',String(!collapsed));
+    card.querySelector('.worker-tile').setAttribute('aria-label',collapsed?'Развернуть вкладку':'Свернуть вкладку');
+    if(!collapsed){card._lastTouch=Date.now();loadShot(card,true);}
+    return;
+  }
   if(e.target.matches('.preview-expand')){
     const preview=e.target.closest('.worker-preview');
     const expanded=preview.classList.toggle('expanded');
@@ -662,6 +714,17 @@ $('workersPanel').addEventListener('click', async e => {
     else if(e.target.checked) card._picked.add(i); else card._picked.delete(i);
     card._lastPick=i; renderSteps(card); return;
   }
+  if(e.target.matches('.record-delete-scenario')){
+    const card=e.target.closest('.worker'),choice=card._loadedScenarioChoice||$('startScenario').value;
+    if(!choice){ toast('Выбери сохранённый сценарий', 'err'); return; }
+    const item=choice.startsWith('scenario:')?localList(SCENARIO_STORE).find(s=>s.id===choice.slice(9)):MACROS.find(m=>m.name===choice.slice(6));
+    if(!item || !confirm(`Удалить сценарий «${item.name}»?`)) return;
+    if(choice.startsWith('scenario:')) localStorage.setItem(SCENARIO_STORE,JSON.stringify(localList(SCENARIO_STORE).filter(s=>s.id!==item.id)));
+    else { const result=await apiFetch(`/api/macros/${encodeURIComponent(item.name)}`,{method:'DELETE'}); if(!result.ok){toast(result.error||'Не удалось удалить','err');return;} await loadMacros(); }
+    card._loadedScenarioChoice=''; card._steps=[]; card._scenarioEdited=false; forgetDraft(card); renderSteps(card);
+    $('startScenario').value=''; fillStartScenario(); document.querySelectorAll('.macro-pick').forEach(fillMacroPick);
+    e.target.closest('.recorder-more')?.removeAttribute('open'); toast('Сценарий удалён'); return;
+  }
   if(e.target.matches('.steps-delete')){
     const card=e.target.closest('.worker'), picked=card._picked||new Set(); if(!picked.size) return;
     card._steps=(card._steps||[]).filter((_,i)=>!picked.has(i));
@@ -680,7 +743,7 @@ $('workersPanel').addEventListener('click', async e => {
     const li=e.target.closest('li'), card=li.closest('.worker'), i=[...li.parentNode.children].indexOf(li);
     const job=card.querySelector('.worker-stop').dataset.job;
     let full=null; try{ full=JSON.parse(sessionStorage.getItem('katya_steps_'+job)||'null'); }catch{}
-    const base=(full?.length===(card._scenarioSteps||[]).length)?full:(card._scenarioSteps||[]);
+    const base=card._scenarioEdited?card._steps:(full?.length===(card._scenarioSteps||[]).length)?full:(card._scenarioSteps||[]);
     const steps=base.map(step=>({...step,value:step.action==='wait'&&!step.value&&step.duration_ms?String(step.duration_ms):(step.value||'')}));
     if(!steps.length) return;
     if(card._scenarioPick===i){ clearScenarioPick(card); return; }
@@ -689,6 +752,9 @@ $('workersPanel').addEventListener('click', async e => {
     card.querySelectorAll('.scenario-steps li').forEach((el,k)=>el.classList.toggle('picked',k===i));
     card.querySelector('.scenario-action-t').textContent=`Шаг ${i+1} из ${steps.length} · ${describeStep(steps[i])}${full?'':' · детали шагов недоступны: открой вкладку из этой панели'}`;
     card.querySelector('.scenario-action').hidden=false;
+    const editor=card.querySelector('.scenario-step-editor');
+    BrowserCore.renderStepEditor(editor,card._steps[i],i,next=>editWorkerScenarioStep(card,i,next),()=>editWorkerScenarioStep(card,i,null,true));
+    BrowserCore.mountStepEditor(card.querySelector('.scenario-detail-list'),editor,i);
     return;
   }
   if(e.target.closest('.scenario-detail-list li')){
@@ -766,13 +832,16 @@ $('workersPanel').addEventListener('click', async e => {
   }
   if(e.target.matches('.worker-action-run')){
     const card = e.target.closest('.worker');
+    if(card.querySelector('.action-type').value==='point' && (!card.querySelector('.action-x').value.trim() || !card.querySelector('.action-y').value.trim())){toast('Укажи координаты от 0 до 100%','err');return;}
     const kindValue = card.querySelector('.action-kind').value;
     runAction(card,{
       action:card.querySelector('.action-type').value,
       kind:kindValue.startsWith('role:') ? 'role' : kindValue,
       role:kindValue.startsWith('role:') ? kindValue.slice(5) : 'button',
       query:card.querySelector('.action-query').value,
-      value:card.querySelector('.action-value').value
+      value:card.querySelector('.action-value').value,
+      x:Number(card.querySelector('.action-x').value)/100,
+      y:Number(card.querySelector('.action-y').value)/100
     });
     return;
   }
@@ -840,7 +909,7 @@ document.addEventListener('paste', e => {
 
 function loadShot(card, force=false){
   if(card._shotLoading) return;
-  const img = card.querySelector('img');
+  const img = card.querySelector('.worker-preview img');
   const job = card.querySelector('[data-job]').dataset.job;
   const worker = card.querySelector('[data-worker]').dataset.worker;
   const now = Date.now();
@@ -852,6 +921,8 @@ function loadShot(card, force=false){
   next.src = `/api/worker/${encodeURIComponent(job)}/${encodeURIComponent(worker)}/screenshot?force=${force ? 1 : 0}&t=${now}`;
   next.decode().then(() => {
     if(!card.isConnected || card._pointerStart) return;
+    const tileImage=card.querySelector('.worker-tile img');
+    if(tileImage){tileImage.src=next.src;tileImage.hidden=false;}
     img.after(next);
     requestAnimationFrame(() => img.remove());
     card.querySelector('.preview-note').hidden = true;
@@ -874,7 +945,7 @@ setInterval(() => {
     if(now<(card._nextShotAt||0)) continue;
     loadShot(card,true);
     const activeInterval=latestCpu > 85 ? 2000 : latestCpu > 65 ? 1200 : 700;
-    card._nextShotAt=now+(card===focused ? activeInterval : latestCpu > 85 ? 8000 : 4000);
+    card._nextShotAt=now+(card.classList.contains('collapsed') ? 8000 : card===focused ? activeInterval : latestCpu > 85 ? 8000 : 4000);
   }
 },250);
 
@@ -935,18 +1006,18 @@ function render(data){
       let card = [...panel.querySelectorAll('.worker')].find(el => el.dataset.id === w.id);
       if(!card){
         card = document.createElement('div');
-        card.className = 'worker'; card.dataset.id = w.id;
-        card.innerHTML = `<div class="worker-preview" tabindex="0"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми, выдели или прокрути" draggable="false" hidden><textarea class="preview-key-capture" aria-label="Клавиатура вкладки" autocomplete="off"></textarea><div class="preview-tools"><button type="button" class="preview-pick">⌕ Выбрать элемент</button></div><button type="button" class="preview-expand">⛶ Развернуть</button><span class="shot-time">Ожидаю кадр…</span></div>
+        card.className = 'worker collapsed'; card.dataset.id = w.id;
+        card.innerHTML = `<button type="button" class="worker-tile" aria-expanded="false" aria-label="Развернуть вкладку"><span class="worker-tile-shot"><img alt="Миниатюра вкладки" hidden><span class="worker-tile-placeholder">Ожидаю кадр…</span></span><span class="worker-tile-info"><strong class="worker-tile-title">Вкладка</strong><small class="worker-tile-url"></small><span class="worker-tile-state"></span></span><span class="worker-tile-chevron">⌄</span></button><div class="worker-preview" tabindex="0"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми, выдели или прокрути" draggable="false" hidden><textarea class="preview-key-capture" aria-label="Клавиатура вкладки" autocomplete="off"></textarea><div class="preview-tools"><button type="button" class="preview-pick">⌕ Выбрать элемент</button></div><button type="button" class="preview-expand">⛶ Развернуть</button><span class="shot-time">Ожидаю кадр…</span></div>
           <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
           <div class="worker-actions"><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
           <div class="worker-url" title="Нажми, чтобы изменить адрес вкладки"></div><input class="worker-url-edit" type="url" hidden spellcheck="false" autocomplete="off" aria-label="Новый адрес вкладки" placeholder="https://">
           ${BrowserCore.scenarioTemplate()}`;
-        const img = card.querySelector('img');
         panel.append(card);
         updateActionFields(card);
         card._steps=[];
         renderSteps(card);
         fillMacroPick(card.querySelector('.macro-pick'));
+        renderWorkerLibrary(card);
       }
       card.querySelector('.st').className = 'st ' + w.state;
       card.querySelector('.name').textContent = 'W-' + w.id.split('-').pop();
@@ -954,6 +1025,9 @@ function render(data){
       card.querySelector('.act').title = w.error || '';
       card.querySelector('.secs').textContent = (w.watch_seconds/3600).toFixed(3) + ' ч';
       card._lastUrl = w.url || w._j.url; if(!card.querySelector('.worker-url').hidden) card.querySelector('.worker-url').textContent = card._lastUrl;
+      card.querySelector('.worker-tile-title').textContent=(()=>{try{return new URL(card._lastUrl).hostname;}catch{return 'Вкладка '+w.id.slice(-4);}})();
+      card.querySelector('.worker-tile-url').textContent=card._lastUrl;
+      card.querySelector('.worker-tile-state').textContent=w.state==='error'||w.state==='blocked'?(w.error||w.state):w.last_action||w.state;
       renderScenario(card,w);
       card.dataset.startUrl=w._j.url;
       if(!card._draftRestored){card._draftRestored=true;restoreDraft(card);}
@@ -1001,6 +1075,7 @@ async function loadMacros(){
     item.querySelector('.danger').onclick=async()=>{ if(!confirm(`Удалить макрос «${m.name}»?`)) return; const d=await apiFetch(`/api/macros/${encodeURIComponent(m.name)}`,{method:'DELETE'}); toast(d.ok?'Удалено':(d.error||'Ошибка'),d.ok?'ok':'err'); loadMacros(); };
     return item; }));
   document.querySelectorAll('.macro-pick').forEach(fillMacroPick); fillStartScenario();
+  document.querySelectorAll('#workersPanel .worker').forEach(renderWorkerLibrary);
 }
 function startSource(){
   const choice=$('startScenario').value; if(!choice) return null;
@@ -1017,7 +1092,7 @@ function applyScenarioSettings(){
 $('startScenario').addEventListener('change',applyScenarioSettings);
 function startSteps(){
   const source=startSource();
-  return (source?.steps||[]).map(({action,kind,query,role,value,replace,x,y,end_x,end_y,nth,timeout_ms,optional,name})=>({action,kind,query,role,value,replace,x,y,end_x,end_y,nth,timeout_ms,optional,name}));
+  return (source?.steps||[]).map(({action,kind,query,role,value,replace,x,y,end_x,end_y,nth,timeout_ms,optional,name,scroll_state})=>({action,kind,query,role,value,replace,x,y,end_x,end_y,nth,timeout_ms,optional,name,scroll_state}));
 }
 function fillStartScenario(){
   const select=$('startScenario'), current=select.value;

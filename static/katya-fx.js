@@ -1,11 +1,10 @@
 /* Katya FX — клубная атмосфера для панели: лучи света, дым, фонари, параллакс.
    Подключение: <script src="/katya-fx.js" defer></script> (после katya.css).
    Рисует на одном <canvas> за контентом. Экономно: 30 кадров/с, DPR ≤ 1,
-   пауза при скрытой вкладке, уважает prefers-reduced-motion, выключается кнопкой «✦ Эффекты». */
+   пауза при скрытой вкладке, уважает prefers-reduced-motion. */
 (() => {
-  const STORE = 'katya_fx';
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let enabled = (() => { try { const v = localStorage.getItem(STORE); return v === null ? !reduced : v === '1'; } catch { return !reduced; } })();
+  const enabled = true;
 
   // ---------- canvas ----------
   const canvas = document.createElement('canvas');
@@ -132,20 +131,9 @@
       frame(performance.now());
       stop(); // frame() планирует следующий кадр; отменяем его в режиме reduced motion
     }
-    const b = document.getElementById('fxToggle'); if (b) { b.textContent = enabled ? '✦ Эффекты' : '✧ Эффекты выкл'; b.classList.toggle('on', enabled); }
   }
   document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); else if (enabled && !reduced) start(); });
   addEventListener('resize', resize, { passive: true });
 
-  // ---------- кнопка-переключатель в шапке ----------
-  function mountToggle() {
-    const host = document.querySelector('.header-actions') || document.querySelector('.top') || document.body;
-    if (document.getElementById('fxToggle')) return;
-    const b = document.createElement('button');
-    b.type = 'button'; b.id = 'fxToggle'; b.className = 'fx-toggle'; b.title = 'Клубная подсветка фона';
-    b.onclick = () => { enabled = !enabled; try { localStorage.setItem(STORE, enabled ? '1' : '0'); } catch {} apply(); };
-    host.prepend(b);
-  }
-
-  resize(); mountToggle(); apply();
+  resize(); apply();
 })();

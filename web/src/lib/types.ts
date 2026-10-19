@@ -24,6 +24,7 @@ export interface Step {
   name?: string;
   replace?: boolean;
   duration_ms?: string; // так сервер отдаёт паузу в snapshot сценария
+  scroll_state?: { x: number; y: number; targets: { query: string; top: number; left: number }[] };
 }
 
 export interface ScenarioSettings {
@@ -109,7 +110,7 @@ export interface LiveState {
   runs_recent?: unknown[];
 }
 
-export interface ActionResult { ok: boolean; error?: string; url?: string; ms?: number; [k: string]: unknown }
+export interface ActionResult { ok: boolean; error?: string; url?: string; ms?: number; selector?: string; scroll_state?: Step['scroll_state']; [k: string]: unknown }
 export interface StepsResult { ok: boolean; completed: number; error?: string; results: (ActionResult & { step: string })[] }
 export interface FileItem { name: string; size: number; modified: number }
 export interface TriggerTestResult {

@@ -35,7 +35,7 @@ export function StartForm({ jobs, scenarios, macros, ownJob }: Props) {
     try { h = JSON.parse(headers.trim() || '{}'); if (!h || Array.isArray(h) || typeof h !== 'object') throw new Error(); } catch { toast('Заголовки должны быть JSON-объектом', 'err'); return; }
     setBusy(true);
     const src = source();
-    const steps = (src?.steps || []).map(({ action, kind, query, role, value, replace, x, y, end_x, end_y, nth, timeout_ms, optional, name }) => ({ action, kind, query, role, value, replace, x, y, end_x, end_y, nth, timeout_ms, optional, name }));
+    const steps = (src?.steps || []).map(({ action, kind, query, role, value, replace, x, y, end_x, end_y, nth, timeout_ms, optional, name, scroll_state }) => ({ action, kind, query, role, value, replace, x, y, end_x, end_y, nth, timeout_ms, optional, name, scroll_state }));
     const r = await startTabs({ url: u, workers, duration, headers: h, user_agent_mode: uaMode, steps });
     setBusy(false);
     if (!r.ok) { toast(r.error || 'Ошибка запуска', 'err'); return; }

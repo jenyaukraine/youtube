@@ -41,6 +41,18 @@ VALUE_ACTIONS = {"drag", "press", "navigate", "attribute", "wait_url", "select"}
 MAX_TIMEOUT_MS = 180_000
 
 
+class ScrollTarget(BaseModel):
+    query: str = Field(max_length=300)
+    top: float = 0
+    left: float = 0
+
+
+class ScrollState(BaseModel):
+    x: float = 0
+    y: float = 0
+    targets: List[ScrollTarget] = Field(default_factory=list, max_length=6)
+
+
 class Step(BaseModel):
     """One browser action. All fields except `action` are optional per action."""
     action: ActionName
@@ -57,6 +69,7 @@ class Step(BaseModel):
     timeout_ms: int = 7000
     optional: bool = False           # a failing optional step does not stop a macro
     name: str = ""                   # label shown in logs and used as screenshot file name
+    scroll_state: Optional[ScrollState] = None  # viewport and nested scroll offsets at a coordinate action
 
 
 class Macro(BaseModel):
@@ -145,22 +158,35 @@ INSPECT_JS = """({x,y}) => {
   if(!el) return null;
   el = el.closest('button,a,input,textarea,select,label,[role]') || el;
   const tag = el.tagName.toLowerCase();
-  let selector = '';
-  if(el.id && document.querySelectorAll('#'+CSS.escape(el.id)).length === 1){
-    selector = '#'+CSS.escape(el.id);
-  } else {
+  const selectorFor = el => {
+    if(el.id && document.querySelectorAll('#'+CSS.escape(el.id)).length === 1) return '#'+CSS.escape(el.id);
     const parts = [];
     for(let node=el; node && node.nodeType===1 && parts.length<8; node=node.parentElement){
       const name=node.tagName.toLowerCase();
       const same=[...(node.parentElement?.children||[])].filter(s=>s.tagName===node.tagName);
       parts.unshift(name+(same.length>1 ? ':nth-of-type('+(same.indexOf(node)+1)+')' : ''));
-      selector=parts.join(' > ');
-      if(document.querySelectorAll(selector).length===1) break;
+      if(document.querySelectorAll(parts.join(' > ')).length===1) break;
     }
+    return parts.join(' > ');
+  };
+  const selector = selectorFor(el);
+  const targets = [];
+  for(let node=el; node && node!==document.body && targets.length<6; node=node.parentElement){
+    if(node===document.scrollingElement || !(node.scrollHeight>node.clientHeight || node.scrollWidth>node.clientWidth)) continue;
+    if(node.scrollTop || node.scrollLeft) targets.push({query:selectorFor(node),top:node.scrollTop,left:node.scrollLeft});
   }
   const r = el.getBoundingClientRect();
   return {selector, tag, text:(el.innerText||el.getAttribute('aria-label')||el.getAttribute('placeholder')||'').trim().slice(0,100),
-          role: el.getAttribute('role') || '', box: {x:r.x, y:r.y, width:r.width, height:r.height}};
+          role: el.getAttribute('role') || '', box: {x:r.x, y:r.y, width:r.width, height:r.height},
+          scroll_state: {x:window.scrollX,y:window.scrollY,targets}};
+}"""
+
+RESTORE_SCROLL_JS = """state => {
+  const number = value => Number.isFinite(Number(value)) ? Math.max(0,Number(value)) : 0;
+  window.scrollTo({left:number(state.x),top:number(state.y),behavior:'instant'});
+  for(const item of (state.targets||[]).slice(0,6).reverse()) {
+    try { document.querySelector(item.query)?.scrollTo({left:number(item.left),top:number(item.top),behavior:'instant'}); } catch {}
+  }
 }"""
 
 PAGE_TEXT_JS = """(limit) => {
@@ -189,7 +215,27 @@ async def run_step(page: Page, step: Step, *, screenshot_sink=None) -> Dict[str,
             viewport = page.viewport_size
             if not viewport:
                 return {"ok": False, "error": "Неизвестен размер вкладки"}
-            await page.mouse.click(round(step.x * viewport["width"]), round(step.y * viewport["height"]))
+            if step.scroll_state is not None:
+                await page.evaluate(RESTORE_SCROLL_JS, step.scroll_state.model_dump())
+            px, py = round(step.x * viewport["width"]), round(step.y * viewport["height"])
+            if step.scroll_state is None:
+                found = await page.evaluate(INSPECT_JS, {"x": px, "y": py})
+                if found:
+                    result["selector"] = found["selector"]
+                    result["scroll_state"] = found["scroll_state"]
+            clicked = False
+            if query:
+                try:
+                    loc = locate(page, step.kind, query, step.role)
+                    if await loc.count() == 1:
+                        await loc.click(timeout=min(timeout, 1200))
+                        clicked = True
+                except Exception:
+                    pass
+            if not clicked:
+                if query and step.scroll_state is not None:
+                    await page.evaluate(RESTORE_SCROLL_JS, step.scroll_state.model_dump())
+                await page.mouse.click(px, py)
         elif step.action == "move":
             viewport = page.viewport_size
             if not viewport:

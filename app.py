@@ -9,6 +9,7 @@ import sys
 import time
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import FastAPI, Header, Query, WebSocket, WebSocketDisconnect
@@ -37,6 +38,7 @@ app = FastAPI(title="Katya Browser Lab", lifespan=lifespan)
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(ROOT, "static")
+EXTENSION_DIR = os.path.join(ROOT, "chrome-extension")
 DATA = os.environ.get("KATYA_DATA_DIR", os.path.join(ROOT, "data"))
 FILES_DIR = os.path.join(DATA, "files")
 MACROS_PATH = os.path.join(DATA, "macros.json")
@@ -52,6 +54,14 @@ if not BROWSER_CHANNEL and os.name == "nt":
 SCENARIO_START_DELAY = float(os.environ.get("KATYA_SCENARIO_DELAY", "1"))  # seconds between page load and first step
 MAX_WORKERS = max(1, min(int(os.environ.get("KATYA_MAX_TABS", "8")), 64))
 os.makedirs(FILES_DIR, exist_ok=True)
+
+
+@app.get("/api/extension-bundle")
+async def extension_bundle():
+    """Source files for updating an already installed unpacked extension."""
+    names = ("background.js", "bridge.js", "content.js", "manifest.json", "popup.html", "popup.js")
+    files = {name: (Path(EXTENSION_DIR) / name).read_text(encoding="utf-8") for name in names}
+    return {"ok": True, "version": json.loads(files["manifest.json"])["version"], "files": files}
 
 
 def _load_api_token() -> str:

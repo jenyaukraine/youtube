@@ -35,7 +35,7 @@ class Fixture(BaseHTTPRequestHandler):
                 self.send_response(200)
             self.send_header("Accept-Ranges", "bytes")
         else:
-            body = b'<html><body style="margin:0"><button id="target" style="position:absolute;top:50px;left:50px;width:200px;height:80px" onclick="this.dataset.count=String(+(this.dataset.count||0)+1)">Click</button><video src="/tone.wav" preload="auto" style="position:absolute;top:200px;width:200px"></video></body></html>'
+            body = b'<html><body style="margin:0;height:2400px"><button id="target" style="position:absolute;top:50px;left:50px;width:200px;height:80px" onclick="this.dataset.count=String(+(this.dataset.count||0)+1)">Click</button><video src="/tone.wav" preload="auto" style="position:absolute;top:200px;width:200px"></video><button id="deep" style="position:absolute;top:1300px;left:100px;width:160px;height:80px" onclick="this.dataset.count=String(+(this.dataset.count||0)+1)">Deep</button><div id="pane" style="position:absolute;top:350px;left:400px;width:240px;height:170px;overflow:auto"><div style="height:600px"></div><button id="nested" style="height:60px" onclick="this.dataset.count=String(+(this.dataset.count||0)+1)">Nested</button></div></body></html>'
             mime = "text/html; charset=utf-8"
             self.send_response(200)
         self.send_header("Content-Type", mime)
@@ -125,11 +125,75 @@ def main():
             panel.locator("#chromeSave").click()
             saved = panel.evaluate("JSON.parse(localStorage.getItem('katya_scenarios_v1'))")
             assert len(saved) == 2 and saved[0]["steps"][0]["query"] == "#target", saved
+            # Coordinate fallback must restore both the page and a nested scroller.
+            for selector, setup, reset, expected in [
+                ("#deep", "window.scrollTo(0,1000)", "window.scrollTo(0,0)", "window.scrollY"),
+                ("#nested", "document.querySelector('#pane').scrollTop=500", "document.querySelector('#pane').scrollTop=0", "document.querySelector('#pane').scrollTop"),
+            ]:
+                target.evaluate(setup)
+                bridge(panel, "record", {"enabled": True})
+                target.locator(selector).click()
+                bridge(panel, "record", {"enabled": False})
+                events = bridge(panel, "events")["events"]
+                recorded = next(event["step"] for event in events if event["step"]["action"] == "point" and event["step"]["query"] == selector)
+                assert recorded["scroll_state"], recorded
+                previous = int(target.evaluate(expected))
+                assert previous > 0, recorded
+                target.evaluate(reset)
+                recorded["query"] = "#missing"  # force the coordinate path
+                replayed = bridge(panel, "execute", {"step": recorded})
+                assert replayed["ok"], replayed
+                assert int(target.evaluate(expected)) == previous, (selector, recorded)
+                assert target.locator(selector).get_attribute("data-count") == "2"
+                target.evaluate("window.scrollTo(0,0);document.querySelector('#pane').scrollTop=0")
+            editable = {"id": "edit", "name": "Editable", "startUrl": fixture_url,
+                        "steps": [{"action": "wait", "value": "1000"}, {"action": "point", "x": 0.2, "y": 0.4}]}
+            panel.evaluate("s => localStorage.setItem('katya_scenarios_v1',JSON.stringify([s,...JSON.parse(localStorage.getItem('katya_scenarios_v1'))]))", editable)
+            panel.reload()
+            panel.locator("#startScenario").select_option("scenario:edit")
+            panel.locator("#chromeStepList li").first.click()
+            editor = panel.locator("#chromeStepEditor")
+            assert editor.locator("input[name=seconds]").is_visible()
+            editor.locator("input[name=seconds]").fill("2.5")
+            editor.locator("button[type=submit]").click()
+            assert panel.evaluate("JSON.parse(localStorage.getItem('katya_scenarios_v1'))[0].steps[0].value") == "2500"
+            panel.locator("#chromeStepList li").nth(1).click()
+            editor.locator("button.step-editor-delete").click()
+            assert len(panel.evaluate("JSON.parse(localStorage.getItem('katya_scenarios_v1'))[0].steps")) == 1
+            panel.locator("#chromeScenarioMount .recorder-more summary").click()
+            panel.once("dialog", lambda dialog: dialog.accept())
+            panel.locator("#chromeScenarioMount .record-delete-scenario").click()
+            assert all(s["id"] != "edit" for s in panel.evaluate("JSON.parse(localStorage.getItem('katya_scenarios_v1'))"))
             panel.reload()
             assert panel.locator("#chromeMacroPick option").count() >= 2
+            assert panel.locator("#fxToggle").count() == 0
+            assert panel.evaluate("document.documentElement.classList.contains('fx-on')")
+            panel.evaluate("""() => render({system:{cpu_percent:3,memory_percent:20,chromium_processes:1},triggers:[],log:[],jobs:[{id:'fixture-job',status:'running',url:'http://example.test',scenario_steps:[{action:'wait',value:'1000'}],workers_list:[{id:'fixture-worker',state:'ready',watch_seconds:0,url:'http://example.test',last_action:'ready',scenario:{phase:'done',completed:1,current:0}}]}]})""")
+            worker_card = panel.locator("#workersPanel .worker")
+            assert worker_card.count() == 1 and "collapsed" in worker_card.get_attribute("class")
+            worker_card.locator(".worker-tile").evaluate("button => button.click()")
+            assert "collapsed" not in worker_card.get_attribute("class")
+            assert worker_card.locator(".scenario-library-list .scenario-library-row").count() >= 1
             panel.screenshot(path=str(Path(tempfile.gettempdir()) / "katya-unified-panel.png"), full_page=True)
+            bundle_names = ("background.js", "bridge.js", "content.js", "manifest.json", "popup.html", "popup.js")
+            bundle = {name: (ROOT / "chrome-extension" / name).read_text(encoding="utf-8") for name in bundle_names}
+            panel.route("**/api/extension-bundle", lambda route: route.fulfill(json={"ok": True, "version": "0.5.1", "files": bundle}))
+            panel.evaluate("""async () => {
+              const root = await navigator.storage.getDirectory();
+              const dir = await root.getDirectoryHandle('katya-updater-test', {create:true});
+              const file = await dir.getFileHandle('manifest.json', {create:true});
+              const writer = await file.createWritable();
+              await writer.write(JSON.stringify({name:'Katya Browser Bridge',version:'0.4.0'})); await writer.close();
+              window.showDirectoryPicker = async () => dir;
+              window.__katyaTestDir = dir;
+            }""")
+            panel.evaluate("document.querySelector('.chrome-install').open = true; document.querySelector('#chromeSetup').hidden = false")
+            panel.locator("#chromeUpdateExtension").click()
+            panel.wait_for_function("document.querySelector('#chromeUpdateStatus').textContent.includes('0.5.1')", timeout=10000)
+            updated_version = panel.evaluate("""async () => JSON.parse(await (await (await window.__katyaTestDir.getFileHandle('manifest.json')).getFile()).text()).version""")
+            assert updated_version == "0.5.1", updated_version
             assert len(context.pages) >= 2
-            print(json.dumps({"ok": True, "shared_scenario": True, "dom_first": True, "point_fallback": True, "resume_step": 2, "recording_persisted": True, "manual_action": True, "media_seek": True, "target_count": 4}))
+            print(json.dumps({"ok": True, "shared_scenario": True, "dom_first": True, "point_fallback": True, "resume_step": 2, "recording_persisted": True, "manual_action": True, "media_seek": True, "extension_update": True, "target_count": 4}))
         finally:
             context.close()
             server.shutdown()

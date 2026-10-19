@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
-import { ACTION_LABELS, STEP_FIELDS, STEP_HINTS, describeStep, saveLocalScenarios, startTabs, toast } from '../lib/api';
-import type { ActionName, Scenario, Step } from '../lib/types';
+import { ACTION_LABELS, STEP_FIELDS, STEP_HINTS, deleteMacro, describeStep, saveLocalScenarios, startTabs, toast } from '../lib/api';
+import type { ActionName, Macro, Scenario, Step } from '../lib/types';
 
-interface Props { scenarios: Scenario[]; onChanged: () => void; onStarted: () => void }
+interface Props { scenarios: Scenario[]; macros: Macro[]; onChanged: () => void; onMacrosChanged: () => void; onStarted: () => void }
 
 const ACTIONS = Object.keys(STEP_FIELDS) as ActionName[];
 const KINDS: Record<string, string> = { css: 'CSS', text: 'Текст', label: 'Label', role: 'Роль', placeholder: 'Placeholder', xpath: 'XPath' };
 
 /** Страница «Сценарии»: список, редактор шагов (поля по действию), переменные, запуск. */
-export function ScenariosPage({ scenarios, onChanged, onStarted }: Props) {
+export function ScenariosPage({ scenarios, macros, onChanged, onMacrosChanged, onStarted }: Props) {
   const [selected, setSelected] = useState<string | null>(scenarios[0]?.id || null);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const s = useMemo(() => scenarios.find(x => x.id === selected) || null, [scenarios, selected]);
@@ -17,6 +17,7 @@ export function ScenariosPage({ scenarios, onChanged, onStarted }: Props) {
   const variables = useMemo(() => { const found = new Set<string>(); for (const st of s?.steps || []) for (const m of String(st.value || '').matchAll(/{{\s*([a-zA-Z][\w]*)\s*}}/g)) found.add(m[1]); return [...found]; }, [s]);
 
   const create = () => { const sc: Scenario = { id: crypto.randomUUID(), name: 'Новый сценарий', startUrl: 'https://', steps: [], createdAt: new Date().toISOString() }; saveLocalScenarios([sc, ...scenarios]); onChanged(); setSelected(sc.id); };
+  const copyMacro = (m: Macro) => { const sc: Scenario = { id: crypto.randomUUID(), name: m.name, startUrl: m.start_url || 'https://', steps: structuredClone(m.steps), settings: m.settings, createdAt: new Date().toISOString() }; saveLocalScenarios([sc, ...scenarios]); onChanged(); setSelected(sc.id); };
   const remove = () => { if (!s || !confirm(`Удалить «${s.name}»?`)) return; saveLocalScenarios(scenarios.filter(x => x.id !== s.id)); onChanged(); setSelected(null); };
   const run = async () => {
     if (!s) return; if (!/^https?:\/\//.test(s.startUrl)) { toast('Укажи стартовую страницу', 'err'); return; }
@@ -38,6 +39,7 @@ export function ScenariosPage({ scenarios, onChanged, onStarted }: Props) {
         <div className="scenario-list">
           {scenarios.map(x => <button key={x.id} className={x.id === selected ? 'active' : ''} onClick={() => { setSelected(x.id); setPicked(new Set()); }}><strong>{x.name}</strong><small>{x.steps.length} шагов · {x.startUrl}</small></button>)}
         </div>
+        {!!macros.length && <><h3>На сервере</h3><div className="scenario-list">{macros.map(m => <div className="scenario-library-row" key={m.name}><button type="button" className="scenario-library-open" onClick={() => copyMacro(m)}><strong>{m.name}</strong><small>{m.steps.length} шагов · открыть для изменения</small></button><button type="button" className="scenario-library-remove" onClick={async () => { if (!confirm(`Удалить «${m.name}»?`)) return; const r = await deleteMacro(m.name); toast(r.ok ? 'Удалено' : (r.error || 'Ошибка'), r.ok ? 'ok' : 'err'); onMacrosChanged(); }}>Удалить</button></div>)}</div></>}
         <div className="row" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn" onClick={exportJson}>Скачать JSON</button>
           <label className="btn">Импорт JSON<input type="file" accept="application/json" hidden onChange={e => e.target.files?.[0] && importJson(e.target.files[0])} /></label>
@@ -70,28 +72,29 @@ export function ScenariosPage({ scenarios, onChanged, onStarted }: Props) {
                   const fields = STEP_FIELDS[st.action] || ['kind', 'query', 'value', 'x', 'y', 'end_x', 'end_y'];
                   const has = (f: string) => fields.includes(f);
                   return (
-                    <div className="step" key={i}>
-                      <div className="step-head">
-                        <input type="checkbox" className="step-pick" checked={picked.has(i)} onChange={() => setPicked(p => { const n = new Set(p); n.has(i) ? n.delete(i) : n.add(i); return n; })} aria-label={`Выбрать шаг ${i + 1}`} />
+                    <details className="step" key={i}>
+                      <summary className="step-head">
+                        <input type="checkbox" className="step-pick" checked={picked.has(i)} onClick={e => e.stopPropagation()} onChange={() => setPicked(p => { const n = new Set(p); n.has(i) ? n.delete(i) : n.add(i); return n; })} aria-label={`Выбрать шаг ${i + 1}`} />
                         <strong>Шаг {i + 1}</strong><span className="step-summary">{describeStep(st)}</span>
                         <div className="row" style={{ display: 'flex', gap: 6 }}>
-                          <button className="btn tiny" title="Вверх" disabled={i === 0} onClick={() => { const steps = [...s.steps];[steps[i - 1], steps[i]] = [steps[i], steps[i - 1]]; save({ ...s, steps }); }}>↑</button>
-                          <button className="btn tiny" title="Вниз" disabled={i === s.steps.length - 1} onClick={() => { const steps = [...s.steps];[steps[i + 1], steps[i]] = [steps[i], steps[i + 1]]; save({ ...s, steps }); }}>↓</button>
-                          <button className="btn tiny danger" title="Удалить" onClick={() => save({ ...s, steps: s.steps.filter((_, k) => k !== i) })}>×</button>
+                          <button className="btn tiny" title="Вверх" disabled={i === 0} onClick={e => { e.stopPropagation(); const steps = [...s.steps];[steps[i - 1], steps[i]] = [steps[i], steps[i - 1]]; save({ ...s, steps }); }}>↑</button>
+                          <button className="btn tiny" title="Вниз" disabled={i === s.steps.length - 1} onClick={e => { e.stopPropagation(); const steps = [...s.steps];[steps[i + 1], steps[i]] = [steps[i], steps[i + 1]]; save({ ...s, steps }); }}>↓</button>
+                          <button className="btn tiny danger" title="Удалить" onClick={e => { e.stopPropagation(); save({ ...s, steps: s.steps.filter((_, k) => k !== i) }); }}>×</button>
                         </div>
-                      </div>
+                      </summary>
                       <div className="step-grid">
                         <div><label>Действие</label><select value={st.action} onChange={e => patchStep(i, { action: e.target.value as ActionName })}>{ACTIONS.map(a => <option key={a} value={a}>{ACTION_LABELS[a] || a}</option>)}</select></div>
                         {has('kind') && <div><label>Поиск элемента</label><select value={st.kind || 'css'} onChange={e => patchStep(i, { kind: e.target.value as Step['kind'] })}>{Object.entries(KINDS).map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></div>}
                         {has('query') && <div><label>Элемент / селектор</label><input value={st.query || ''} onChange={e => patchStep(i, { query: e.target.value })} placeholder="button, Продолжить, Email" /></div>}
-                        {has('value') && <div><label>Значение / {'{{переменная}}'}</label><input value={st.value || ''} onChange={e => patchStep(i, { value: e.target.value })} placeholder={({ wait: '1500', press: 'Enter', scroll: '600', navigate: 'https://…', type: '{{username}}' } as Record<string, string>)[st.action] || ''} /></div>}
+                        {has('value') && <div><label>{st.action === 'wait' ? 'Пауза, секунды' : 'Значение / {{переменная}}'}</label><input type={st.action === 'wait' ? 'number' : 'text'} min={st.action === 'wait' ? 0 : undefined} max={st.action === 'wait' ? 60 : undefined} step={st.action === 'wait' ? 0.1 : undefined} value={st.action === 'wait' ? Number(st.value || st.duration_ms || 0) / 1000 : st.value || ''} onChange={e => patchStep(i, { value: st.action === 'wait' ? String(Math.round(Number(e.target.value) * 1000)) : e.target.value })} placeholder={({ press: 'Enter', scroll: '600', navigate: 'https://…', type: '{{username}}' } as Record<string, string>)[st.action] || ''} /></div>}
                         {has('x') && <div><label>X (0–1)</label><input type="number" min={0} max={1} step={0.01} value={st.x ?? 0} onChange={e => patchStep(i, { x: Number(e.target.value) })} /></div>}
                         {has('y') && <div><label>Y (0–1)</label><input type="number" min={0} max={1} step={0.01} value={st.y ?? 0} onChange={e => patchStep(i, { y: Number(e.target.value) })} /></div>}
+                        {st.action === 'point' && st.scroll_state && <><div><label>Прокрутка страницы, px</label><input type="number" min={0} value={st.scroll_state.y} onChange={e => patchStep(i, { scroll_state: { ...st.scroll_state!, y: Number(e.target.value) } })} /></div>{st.scroll_state.targets.map((target, n) => <div key={n}><label>Прокрутка области {n + 1}, px</label><input type="number" min={0} value={target.top} onChange={e => patchStep(i, { scroll_state: { ...st.scroll_state!, targets: st.scroll_state!.targets.map((t, k) => k === n ? { ...t, top: Number(e.target.value) } : t) } })} /></div>)}</>}
                         {has('end_x') && <div><label>Конец X (0–1)</label><input type="number" min={0} max={1} step={0.01} value={st.end_x ?? 0} onChange={e => patchStep(i, { end_x: Number(e.target.value) })} /></div>}
                         {has('end_y') && <div><label>Конец Y (0–1)</label><input type="number" min={0} max={1} step={0.01} value={st.end_y ?? 0} onChange={e => patchStep(i, { end_y: Number(e.target.value) })} /></div>}
                         <div className="wide hint">{STEP_HINTS[st.action] || 'Укажи способ поиска и элемент.'}</div>
                       </div>
-                    </div>
+                    </details>
                   );
                 })}
                 {!s.steps.length && <div className="hint">Шагов пока нет. Запиши действия во вкладке или добавь шаг здесь.</div>}

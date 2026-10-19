@@ -26,10 +26,20 @@ function record(step) {
   if (location.hostname === 'accounts.google.com') return;
   chrome.runtime.sendMessage({kind: 'record-event', step, at: Date.now()}, () => void chrome.runtime.lastError);
 }
+function captureScroll(target) {
+  const targets = [];
+  for (let el = target; el && el !== document.body && targets.length < 6; el = el.parentElement) {
+    if (el === document.scrollingElement || !(el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth)) continue;
+    if (!el.scrollTop && !el.scrollLeft) continue;
+    const query = selectorFor(el);
+    if (query) targets.push({query, top: el.scrollTop, left: el.scrollLeft});
+  }
+  return {x: window.scrollX, y: window.scrollY, targets};
+}
 document.addEventListener('click', event => {
   if (!event.isTrusted || !(event.target instanceof Element)) return;
   const target = event.target.closest('button,a,input,[role="button"],label,summary') || event.target;
-  record({action: 'point', kind: 'css', query: selectorFor(target), x: event.clientX / innerWidth, y: event.clientY / innerHeight});
+  record({action: 'point', kind: 'css', query: selectorFor(target), x: event.clientX / innerWidth, y: event.clientY / innerHeight, scroll_state: captureScroll(target)});
 }, true);
 function recordField(field) {
   record({action: 'fill', kind: 'css', query: selectorFor(field), value: String(field.value).slice(0, 2000)});
