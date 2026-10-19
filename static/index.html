@@ -423,7 +423,11 @@ function render(data){
   let total = 0, errs = 0, anyRunning = false;
   const panel = $('workersPanel');
   const allWorkers = [];
-  active.forEach(j => (j.workers_list||[]).forEach(w => { w._j = j; allWorkers.push(w); total += w.watch_seconds; if(w.state==='error') errs++; }));
+  active.forEach(j => (j.workers_list||[]).forEach(w => {
+    total += w.watch_seconds;
+    if(w.state==='error') errs++;
+    if(w.state!=='stopped'){ w._j = j; allWorkers.push(w); }
+  }));
   if(active.length) anyRunning = true;
 
   // header
