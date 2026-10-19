@@ -8,6 +8,7 @@ import secrets
 import sys
 import time
 import uuid
+from contextlib import asynccontextmanager
 from typing import Dict, List, Literal, Optional
 
 from fastapi import FastAPI, Header, Query, WebSocket, WebSocketDisconnect
@@ -20,8 +21,17 @@ from katya.actions import Macro, Step, normalize_url, run_step, run_steps, valid
 from katya.profiles import PROFILES, context_options, find_profile
 from katya.actions import locate
 from katya.triggers import Condition, Trigger, TriggerEngine, validate_trigger
+from katya.scheduler import Schedule, Scheduler, validate_schedule
 
-app = FastAPI(title="Katya Browser Lab")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Startup: run the macro scheduler in the background. Shutdown: stop it."""
+    SCHEDULER.start()
+    yield
+    await SCHEDULER.stop()
+
+
+app = FastAPI(title="Katya Browser Lab", lifespan=lifespan)
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(ROOT, "static")
@@ -80,6 +90,7 @@ class Worker:
         self.scenario_current = -1
         self.scenario_total = 0
         self.scenario_wait_until = 0.0
+        self.scenario_result: Optional[dict] = None   # {"ok", "completed", "error"} once the start scenario ran
 
     def snapshot(self):
         return {
@@ -123,6 +134,8 @@ class Job:
         self.profile = profile          # fixed profile name, or "" for random
         self.headers: Dict[str, str] = {}
         self.steps: List[Step] = []     # run after load in every tab
+        self.close_when_done = False    # close each tab 5 s after its start scenario finished or failed
+        self.task: Optional[asyncio.Task] = None   # the run_job task; done once every tab is closed
         self.workers_list: List[Worker] = []
         self.status = "pending"         # pending|running|stopped
         self.created = time.time()
@@ -154,6 +167,7 @@ class Job:
             "created": self.created,
             "workers_list": [w.snapshot() for w in self.workers_list],
             "scenario_steps": [public_step(step) for step in self.steps],
+            "close_when_done": self.close_when_done,
         }
         if with_token:
             data["control_token"] = self.control_token
@@ -298,10 +312,20 @@ async def worker_loop(job: Job, w: Worker, page: Page):
                                      screenshot_sink=make_screenshot_sink(w.id),
                                      on_progress=on_scenario_progress)
             w.scenario_phase = "done" if result["ok"] else "error"
+            w.scenario_result = {"ok": result["ok"], "completed": result["completed"],
+                                 "error": result.get("error", "")}
             w.last_action = (f"Сценарий выполнен: {result['completed']} шагов" if result["ok"]
                              else f"Сценарий остановлен на шаге {result['completed'] + 1}: {result.get('error', '')[:60]}")
             log(f"worker {w.id} start scenario: {result['completed']}/{len(job.steps)} steps")
             job.screenshots.pop(w.id, None)
+        else:
+            w.scenario_result = {"ok": True, "completed": 0, "error": ""}
+
+        if job.close_when_done:
+            w.last_action = "Сценарий завершён, вкладка закроется через 5 с"
+            await asyncio.sleep(5)
+            w.last_action = "Вкладка закрыта по завершении сценария"
+            return
 
         last_tick = time.time()
         last_video_time = None
@@ -567,32 +591,52 @@ def validate_headers(headers: Dict[str, str]) -> Optional[str]:
     return None
 
 
-@app.post("/api/start")
-async def start(req: StartReq):
-    url = normalize_url(req.url)
-    if not url:
-        return JSONResponse({"ok": False, "error": "Укажи полный http:// или https:// URL"}, status_code=400)
-    header_error = validate_headers(req.headers)
+def validate_launch(url: str, headers: Dict[str, str], profile: str, steps: List[Step]) -> Optional[str]:
+    """Shared checks for everything that opens tabs: the start endpoint and the scheduler."""
+    if not normalize_url(url):
+        return "Укажи полный http:// или https:// URL"
+    header_error = validate_headers(headers)
     if header_error:
-        return JSONResponse({"ok": False, "error": header_error}, status_code=400)
-    if req.profile and not find_profile(req.profile):
-        return JSONResponse({"ok": False, "error": "Неизвестный профиль браузера"}, status_code=400)
-    workers = max(1, min(int(req.workers), MAX_WORKERS))
-    duration = max(0, int(req.duration))
-    jid = uuid.uuid4().hex[:8]
-    cookies = cookies_from_string(req.cookies)
-    for step in req.steps:
+        return header_error
+    if profile and not find_profile(profile):
+        return "Неизвестный профиль браузера"
+    for step in steps:
         step_error = validate_step(step)
         if step_error:
-            return JSONResponse({"ok": False, "error": f"Сценарий: {step_error}"}, status_code=400)
-    job = Job(jid, url, workers, duration, cookies, req.user_agent_mode, req.dialogs, req.profile)
-    job.headers = req.headers
-    job.steps = req.steps[:200]
+            return f"Сценарий: {step_error}"
+    return None
+
+
+def launch_job(url: str, *, workers: int = 1, duration: int = 0, cookies: Optional[List[dict]] = None,
+               headers: Optional[Dict[str, str]] = None, user_agent_mode: str = "chrome",
+               dialogs: str = "dismiss", profile: str = "", steps: Optional[List[Step]] = None,
+               close_when_done: bool = False, origin: str = "") -> Job:
+    """Create a job and start opening its tabs. Inputs must already be validated (validate_launch)."""
+    url = normalize_url(url) or url
+    workers = max(1, min(int(workers), MAX_WORKERS))
+    duration = max(0, int(duration))
+    jid = uuid.uuid4().hex[:8]
+    job = Job(jid, url, workers, duration, cookies or [], user_agent_mode, dialogs, profile)
+    job.headers = headers or {}
+    job.steps = (steps or [])[:200]
+    job.close_when_done = close_when_done
     JOBS[jid] = job
-    asyncio.create_task(run_job(job))
-    log(f"NEW JOB {jid} url={job.url} workers={workers} duration={duration} cookies={'yes' if cookies else 'no'}")
-    return {"ok": True, "id": jid, "workers": workers,
-            "worker_ids": [f"{jid}-{i}" for i in range(workers)],
+    job.task = asyncio.create_task(run_job(job))
+    log(f"NEW JOB {jid} url={job.url} workers={workers} duration={duration} "
+        f"cookies={'yes' if job.cookies else 'no'}{' ' + origin if origin else ''}")
+    return job
+
+
+@app.post("/api/start")
+async def start(req: StartReq):
+    error = validate_launch(req.url, req.headers, req.profile, req.steps)
+    if error:
+        return JSONResponse({"ok": False, "error": error}, status_code=400)
+    job = launch_job(req.url, workers=req.workers, duration=req.duration, cookies=cookies_from_string(req.cookies),
+                     headers=req.headers, user_agent_mode=req.user_agent_mode, dialogs=req.dialogs,
+                     profile=req.profile, steps=req.steps)
+    return {"ok": True, "id": job.id, "workers": job.workers,
+            "worker_ids": [f"{job.id}-{i}" for i in range(job.workers)],
             "control_token": job.control_token}
 
 
@@ -604,6 +648,7 @@ async def status():
         "log": LOGS[-80:],
         "system": system_metrics(),
         "headless": HEADLESS,
+        "schedules": SCHEDULER.snapshot(),
     }
 
 
@@ -964,6 +1009,121 @@ async def run_macro(name: str, req: RunMacroReq, x_katya_token: Optional[str] = 
     return await browser_steps(req.job_id, req.worker_id, steps, x_katya_token)
 
 
+# ---------------- API: schedules ----------------
+def macro_launch_settings(macro: dict) -> dict:
+    """Launch options stored with a macro (settings{headers,user_agent_mode,profile,dialogs}), sanitized."""
+    settings = macro.get("settings") if isinstance(macro.get("settings"), dict) else {}
+    headers = settings.get("headers") if isinstance(settings.get("headers"), dict) else {}
+    user_agent_mode = settings.get("user_agent_mode")
+    dialogs = settings.get("dialogs")
+    profile = settings.get("profile")
+    return {
+        "headers": {str(k): str(v) for k, v in headers.items()},
+        "user_agent_mode": user_agent_mode if user_agent_mode in ("chrome", "random", "browser") else "chrome",
+        "dialogs": dialogs if dialogs in ("dismiss", "accept") else "dismiss",
+        "profile": profile if isinstance(profile, str) else "",
+    }
+
+
+async def run_scheduled_macro(schedule: Schedule) -> dict:
+    """Scheduler callback: open tab(s) with the macro as start scenario, wait until they close, report."""
+    macro = load_macros().get(schedule.macro_name)
+    if not macro:
+        return {"ok": False, "error": "Макрос не найден", "completed": 0, "total": 0}
+    steps = [Step(**item) for item in macro.get("steps", [])]
+    url = schedule.url or macro.get("start_url", "")
+    settings = macro_launch_settings(macro)
+    error = validate_launch(url, settings["headers"], settings["profile"], steps)
+    if error:
+        return {"ok": False, "error": error, "completed": 0, "total": len(steps)}
+    job = launch_job(url, workers=schedule.workers, duration=0, headers=settings["headers"],
+                     user_agent_mode=settings["user_agent_mode"], dialogs=settings["dialogs"],
+                     profile=settings["profile"], steps=steps, close_when_done=True,
+                     origin=f"schedule={schedule.id} macro={schedule.macro_name!r}")
+    # Page load, scenario (sum of step timeouts, waits included) and the 5 s grace before closing.
+    budget = 90 + sum(step.timeout_ms for step in steps) / 1000
+    budget += sum(float(step.value) / 1000 for step in steps if step.action == "wait" and step.value.isdigit())
+    try:
+        await asyncio.wait_for(asyncio.shield(job.task), timeout=min(budget, 3600))
+    except asyncio.TimeoutError:
+        await stop_job(job)
+        return {"ok": False, "error": "Таймаут запуска", "completed": 0, "total": len(steps)}
+    results = [w.scenario_result or {"ok": False, "completed": 0, "error": w.error or "вкладка не открылась"}
+               for w in job.workers_list] or [{"ok": False, "completed": 0, "error": "вкладки не открылись"}]
+    failed = next((r for r in results if not r["ok"]), None)
+    return {"ok": failed is None, "completed": min(r["completed"] for r in results), "total": len(steps),
+            "error": failed["error"] if failed else "", "job_id": job.id}
+
+
+SCHEDULER = Scheduler(os.path.join(DATA, "schedules.json"), log=log, runner=run_scheduled_macro)  # started by lifespan
+
+
+@app.get("/api/schedules")
+async def list_schedules():
+    return {"ok": True, "schedules": SCHEDULER.snapshot()}
+
+
+@app.post("/api/schedules")
+async def save_schedule(schedule: Schedule, x_katya_token: Optional[str] = Header(default=None),
+                        x_katya_job: Optional[str] = Header(default=None),
+                        x_katya_control_token: Optional[str] = Header(default=None)):
+    """Create a schedule, or update it when `id` names an existing one."""
+    if not writer_authorized(x_katya_token, x_katya_job, x_katya_control_token):
+        return forbidden()
+    error = validate_schedule(schedule)
+    if error:
+        return JSONResponse({"ok": False, "error": error}, status_code=400)
+    macro = load_macros().get(schedule.macro_name)
+    if not macro:
+        return JSONResponse({"ok": False, "error": "Макрос не найден"}, status_code=404)
+    if schedule.url and not normalize_url(schedule.url):
+        return JSONResponse({"ok": False, "error": "Укажи полный http:// или https:// URL"}, status_code=400)
+    if not schedule.url and not normalize_url(macro.get("start_url", "")):
+        return JSONResponse({"ok": False, "error": "У макроса нет стартового URL, укажи url"}, status_code=400)
+    if len(SCHEDULER.schedules) >= 100 and schedule.id not in SCHEDULER.schedules:
+        return JSONResponse({"ok": False, "error": "Слишком много расписаний"}, status_code=400)
+    saved = SCHEDULER.add(schedule)
+    log(f"schedule {saved.id} saved: macro={saved.macro_name!r} "
+        f"{'every ' + str(saved.every_minutes) + ' min' if saved.every_minutes else saved.cron}")
+    return {"ok": True, "schedule": saved.model_dump()}
+
+
+@app.delete("/api/schedules/{schedule_id}")
+async def delete_schedule(schedule_id: str, x_katya_token: Optional[str] = Header(default=None),
+                          x_katya_job: Optional[str] = Header(default=None),
+                          x_katya_control_token: Optional[str] = Header(default=None)):
+    if not writer_authorized(x_katya_token, x_katya_job, x_katya_control_token):
+        return forbidden()
+    if not SCHEDULER.remove(schedule_id):
+        return JSONResponse({"ok": False, "error": "Расписание не найдено"}, status_code=404)
+    return {"ok": True}
+
+
+@app.post("/api/schedules/{schedule_id}/enabled")
+async def toggle_schedule(schedule_id: str, enabled: bool = Query(...),
+                          x_katya_token: Optional[str] = Header(default=None),
+                          x_katya_job: Optional[str] = Header(default=None),
+                          x_katya_control_token: Optional[str] = Header(default=None)):
+    if not writer_authorized(x_katya_token, x_katya_job, x_katya_control_token):
+        return forbidden()
+    if not SCHEDULER.set_enabled(schedule_id, enabled):
+        return JSONResponse({"ok": False, "error": "Расписание не найдено"}, status_code=404)
+    return {"ok": True, "schedule": SCHEDULER.schedules[schedule_id].model_dump()}
+
+
+@app.post("/api/schedules/{schedule_id}/run")
+async def run_schedule_now(schedule_id: str, x_katya_token: Optional[str] = Header(default=None),
+                           x_katya_job: Optional[str] = Header(default=None),
+                           x_katya_control_token: Optional[str] = Header(default=None)):
+    """Start the schedule's macro right now; the result shows up in last_result when the tab closes."""
+    if not writer_authorized(x_katya_token, x_katya_job, x_katya_control_token):
+        return forbidden()
+    error = SCHEDULER.run_now(schedule_id)
+    if error:
+        return JSONResponse({"ok": False, "error": error}, status_code=404 if "не найдено" in error else 409)
+    return {"ok": True, "schedule": SCHEDULER.schedules[schedule_id].model_dump()}
+
+
 # ---------------- API: files (screenshots, downloads) ----------------
 @app.get("/api/files")
 async def list_files(x_katya_token: Optional[str] = Header(default=None)):
@@ -1014,6 +1174,7 @@ async def ws(websocket: WebSocket):
                 "log": LOGS[-60:],
                 "system": system_metrics(),
                 "triggers": TRIGGERS.snapshot(),
+                "schedules": SCHEDULER.snapshot(),
             })
             await websocket.send_text(payload)
             active_scenario = any(w.scenario_phase in ("waiting", "running")

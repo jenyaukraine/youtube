@@ -107,18 +107,54 @@ python3 app.py
 | `GET/POST /api/triggers`, `DELETE /api/triggers/{id}`, `POST /api/triggers/{id}/enabled?enabled=` | триггеры |
 | `POST /api/triggers/test` `{when, then, job_id, worker_id, run}` | проверить условие на вкладке, при `run` выполнить реакцию |
 | `GET/POST /api/macros`, `DELETE /api/macros/{name}`, `POST /api/macros/{name}/run` | серверные сценарии |
+| `GET/POST /api/schedules`, `DELETE /api/schedules/{id}`, `POST /api/schedules/{id}/enabled?enabled=`, `POST /api/schedules/{id}/run` | расписания запусков макросов |
 | `GET /api/files`, `GET/DELETE /api/files/{name}` | скриншоты и загрузки |
 | `WS /ws` | живое состояние каждые 2 с |
 
 Триггер: `{"name","when":{"kind","query","role"},"then":[шаги],"once_per_page","cooldown_ms","job_id"}`; `when.kind`
 может быть `url` с регулярным выражением. Проверяется в каждой вкладке раз в секунду, хранится в `data/triggers.json`.
 
+## Расписания
+
+Сервер сам запускает сохранённый макрос по cron-выражению или каждые N минут: открывает новую вкладку как
+`POST /api/start` (URL расписания или `start_url` макроса, настройки запуска из `settings` макроса), выполняет шаги
+и через 5 с закрывает вкладку. Расписания проверяются раз в 15 с, хранятся в `data/schedules.json`, результат последнего
+запуска (ok/ошибка, число шагов, длительность) попадает в `last_result` и в лог. Время — локальное время сервера.
+
+Расписание: `{"macro_name", "cron" | "every_minutes", "url", "workers", "enabled"}`; в ответах также `id`, `last_run`,
+`last_result`, `next_run`, `running`. Cron из 5 полей `минуты часы дни месяцы дни_недели`: `*`, числа, списки `1,15`,
+диапазоны `9-18`, шаг `*/5` и `1-30/10`, дни недели `0-7` (0 и 7 — воскресенье) или `mon..sun`. Если заданы и день
+месяца, и день недели, срабатывает любой из них (как в классическом cron).
+
+| cron | когда |
+|---|---|
+| `*/30 * * * *` | каждые 30 минут |
+| `0 9 * * 1-5` | по будням в 9:00 |
+| `15 8,20 * * *` | в 8:15 и 20:15 каждый день |
+| `0 0 1 * *` | 1-го числа в полночь |
+| `0 12 * * sun` | по воскресеньям в 12:00 |
+
+```bash
+curl -X POST http://127.0.0.1:8010/api/schedules -H "X-Katya-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"macro_name":"Прогрев","cron":"0 9 * * 1-5","url":"https://example.com","workers":1}'
+curl -X POST http://127.0.0.1:8010/api/schedules -H "X-Katya-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"macro_name":"Прогрев","every_minutes":30}'
+curl http://127.0.0.1:8010/api/schedules
+curl -X POST "http://127.0.0.1:8010/api/schedules/{id}/enabled?enabled=false" -H "X-Katya-Token: $TOKEN"
+curl -X POST http://127.0.0.1:8010/api/schedules/{id}/run -H "X-Katya-Token: $TOKEN"
+curl -X DELETE http://127.0.0.1:8010/api/schedules/{id} -H "X-Katya-Token: $TOKEN"
+```
+
+`POST /api/schedules` с существующим `id` обновляет расписание, история запусков сохраняется. Записи принимают API-токен
+или пару `X-Katya-Job` + `X-Katya-Control-Token`. Тесты планировщика: `python tests/test_scheduler.py`.
+
 ## MCP для агентов (Claude Code, Codex, OpenClaw, Cursor)
 
 `python -m katya.mcp_server` (или `Katya-MCP.bat`) — stdio MCP-сервер поверх HTTP API: агенты и панель делят одни вкладки.
 Инструменты: `katya_open`, `katya_tabs`, `katya_action`, `katya_run`, `katya_text`, `katya_screenshot`, `katya_inspect`,
 `katya_close`, `katya_stop_all`, `katya_profiles`, `katya_triggers`, `katya_trigger_add`, `katya_trigger_delete`,
-`katya_macros`, `katya_macro_save`, `katya_macro_run`, `katya_files`, `katya_file`.
+`katya_macros`, `katya_macro_save`, `katya_macro_run`, `katya_schedules`, `katya_schedule_add`, `katya_schedule_delete`,
+`katya_schedule_run`, `katya_files`, `katya_file`.
 
 Claude Code на Windows:
 
@@ -140,9 +176,10 @@ claude mcp add katya -- cmd /c D:\Projects\youtube\Katya-MCP.bat
 
 | путь | что это |
 |---|---|
-| `app.py` | FastAPI: вкладки, API, триггеры, макросы, файлы, WebSocket |
+| `app.py` | FastAPI: вкладки, API, триггеры, макросы, расписания, файлы, WebSocket |
 | `katya/actions.py` | схема шага и исполнитель — единственное место для новых действий |
 | `katya/triggers.py` | движок триггеров |
+| `katya/scheduler.py` | планировщик запусков макросов (cron / каждые N минут) |
 | `katya/profiles.py` | профили браузера |
 | `katya/mcp_server.py` | MCP-мост для агентов |
 | `static/index.html` | панель (разметка и логика) |
@@ -154,3 +191,4 @@ claude mcp add katya -- cmd /c D:\Projects\youtube\Katya-MCP.bat
 | `scripts/package_extension.py` | сборка ZIP расширения |
 | `Start-Katya.bat`, `Katya-MCP.bat` | запуск на Windows |
 | `Dockerfile`, `compose.yaml`, `deploy/` | сервер и mini-PC |
+| `tests/` | `test_scheduler.py` (cron, хранилище), `test_extension_flow.py` |
