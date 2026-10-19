@@ -233,6 +233,11 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
 @media(max-width:600px){.control-grid{grid-template-columns:1fr}.worker-actions{grid-column:1/-1;justify-content:flex-start}.worker-meta{grid-column:1/-1;flex-wrap:wrap}}
 .preview-tools{position:absolute;left:10px;bottom:10px;display:flex;gap:6px;z-index:2}.preview-tools button{border:1px solid #61758b;border-radius:8px;background:rgba(8,16,25,.91);color:#e8f6ff;padding:9px 11px;font:800 12px 'Manrope',sans-serif;cursor:pointer}.preview-tools button.on{border-color:#a8f278;background:#23442a;color:#e6ffd8}.preview-expand{position:absolute;right:10px;top:10px;z-index:2;white-space:nowrap;border:1px solid #61758b;border-radius:8px;background:rgba(8,16,25,.91);color:#e8f6ff;padding:9px 11px;font:800 12px 'Manrope',sans-serif;cursor:pointer}.worker-preview.pick img{cursor:crosshair}.worker-control .recorder{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}.worker-control .recorder button{padding:8px 10px;border:1px solid #465568;border-radius:8px;background:#182230;color:#d7e5f4;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-control .recorder .recording{border-color:#ff8d93;color:#ffb8bc;background:#39222a}.recorded-steps{margin:10px 0 0;padding-left:22px;color:#b9c8d9;font:11px 'Manrope',sans-serif}.recorded-steps li{padding:4px 0}.recorded-steps:empty::before{content:'Пока нет записанных действий';color:#73849a}
 .scenario-save{display:flex;gap:8px;align-items:center;margin-top:10px}.scenario-save[hidden]{display:none}.scenario-save input{flex:1;min-width:0;padding:9px 11px;border:1px solid #61758b;border-radius:8px;background:#101722;color:#fff}.scenario-save button{padding:9px 11px;border:1px solid var(--green);border-radius:8px;background:#263b29;color:#e6ffd8;font-weight:800;cursor:pointer}
+.repeat-control{display:inline-flex;align-items:center;gap:6px;padding:4px 5px 4px 8px;border:1px solid #59617f;border-radius:10px;background:#1c2334;color:#c8d1e4;font:700 11px 'Manrope',sans-serif}
+.repeat-control input{width:54px;min-width:0;min-height:31px;padding:4px 6px;text-align:center;border:1px solid #6b7491;border-radius:6px;background:#0e1523;color:#f1f4ff;font:700 13px 'JetBrains Mono',monospace}
+.worker-control .recorder .repeat-control button{margin-left:3px;border-color:#8491ca;background:#34406c;color:#edf0ff}
+.worker-control .recorder .repeat-control button:hover{background:#42518a}
+.worker-control .recorder .repeat-control button.running{border-color:#d2a468;background:#56412d;color:#ffe4bf}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.goal{align-items:stretch}.goal .pct{margin-left:0}.wrap{padding:22px 18px 45px}}
 @media(max-width:600px){header{align-items:flex-start}.brand h1{font-size:20px}.brand p{font-size:11px}.logo{width:48px;height:48px}.badge{font-size:10px;padding:9px 10px}.badge .dot{width:8px;height:8px}.goal{padding:24px}.goal .big{font-size:43px}.goal .pct{width:100%}.card{padding:20px}.totals{grid-template-columns:1fr 1fr}.tile:last-child{grid-column:span 2}.worker{flex-wrap:wrap}.worker .act{order:3;text-align:left;flex-basis:100%}}
 
@@ -738,15 +743,37 @@ $('workersPanel').addEventListener('click', async e => {
     }else if(e.target.matches('.record-copy')){
       try{ await navigator.clipboard.writeText(JSON.stringify(card._steps||[],null,2)); toast('Шаги скопированы как JSON'); }catch{ toast('Не удалось скопировать','err'); }
     }else{
+      if(card._replaying){ card._cancelReplay=true; e.target.disabled=true; e.target.textContent='Останавливаю…'; return; }
       const steps=[...(card._steps||[])]; if(!steps.length){ toast('Нет записанных шагов','err'); return; }
       if(steps.some(step=>/{{\s*[a-zA-Z][\w]*\s*}}/.test(step.value||''))){
         toast('В записи есть переменные. Задай их на странице «Сценарии»','err'); return;
       }
-      e.target.disabled=true;
-      let completed=0;
-      for(const step of steps){ const result=await runAction(card,step,{quiet:true,record:false,refresh:false}); if(!result?.ok) break; completed++; await new Promise(resolve=>setTimeout(resolve,500)); }
-      e.target.disabled=false; loadShot(card,true);
-      toast(completed===steps.length ? `Повторено шагов: ${completed}` : `Остановлено на шаге ${completed+1}`,completed===steps.length?'ok':'err');
+      const countInput=card.querySelector('.repeat-count');
+      const repeats=Number(countInput.value);
+      if(!Number.isInteger(repeats) || repeats<1 || repeats>100){ toast('Укажи от 1 до 100 повторов','err'); return; }
+      card._replaying=true; card._cancelReplay=false;
+      countInput.disabled=true; e.target.classList.add('running'); e.target.textContent='■ Остановить';
+      let completedRuns=0, failedStep=0;
+      try {
+        for(let run=0;run<repeats && !card._cancelReplay && card.isConnected;run++){
+          for(let i=0;i<steps.length;i++){
+            if(card._cancelReplay || !card.isConnected) break;
+            const result=await runAction(card,steps[i],{quiet:true,record:false,refresh:false});
+            if(!result?.ok){ failedStep=i+1; break; }
+            if(i<steps.length-1) await new Promise(resolve=>setTimeout(resolve,500));
+          }
+          if(failedStep || card._cancelReplay || !card.isConnected) break;
+          completedRuns++;
+          if(run<repeats-1) await new Promise(resolve=>setTimeout(resolve,500));
+        }
+      } finally {
+        card._replaying=false; countInput.disabled=false; e.target.disabled=false;
+        e.target.classList.remove('running'); e.target.textContent='▶ Повторить';
+        if(card.isConnected) loadShot(card,true);
+      }
+      if(failedStep) toast(`Сбой на повторе ${completedRuns+1}, шаг ${failedStep}`,'err');
+      else if(card._cancelReplay) toast(`Остановлено: ${completedRuns} из ${repeats}`,'err');
+      else toast(`Выполнено повторов: ${completedRuns}`,'ok');
     }
     return;
   }
@@ -955,7 +982,7 @@ function render(data){
               <input class="action-value" placeholder="Значение" aria-label="Значение" hidden>
             </div>
             <div class="control-help"></div><button type="button" class="worker-action-run">Выполнить действие</button>
-            <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><button type="button" class="record-replay">▶ Повторить</button><button type="button" class="record-save">Сохранить сценарий</button><button type="button" class="record-copy">Копировать шаги</button><button type="button" class="record-clear">Очистить</button><select class="macro-pick" aria-label="Запустить макрос"><option value="">▶ Макрос…</option></select></div>
+            <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><div class="repeat-control"><input type="number" class="repeat-count" min="1" max="100" step="1" value="1" aria-label="Сколько раз повторить"><span>раз</span><button type="button" class="record-replay">▶ Повторить</button></div><button type="button" class="record-save">Сохранить сценарий</button><button type="button" class="record-copy">Копировать шаги</button><button type="button" class="record-clear">Очистить</button><select class="macro-pick" aria-label="Запустить макрос"><option value="">▶ Макрос…</option></select></div>
             <div class="scenario-save" hidden><input class="scenario-name" maxlength="80" placeholder="Название сценария" aria-label="Название сценария"><button type="button" class="scenario-save-confirm">Сохранить</button></div>
             <ol class="recorded-steps"></ol>
           </details>`;
