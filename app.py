@@ -462,7 +462,7 @@ def forbidden():
 # ---------------- API: jobs and tabs ----------------
 class StartReq(BaseModel):
     url: str
-    workers: int = 3
+    workers: int = 1
     duration: int = 0          # 0 = until stopped
     cookies: str = ""           # raw cookie string (optional)
     headers: Dict[str, str] = {}
