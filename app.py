@@ -627,19 +627,6 @@ async def browser_action(job_id: str, worker_id: str, req: ActionReq,
         return JSONResponse({"ok": False, "error": error}, status_code=400)
     async with job.page_lock(worker_id):
         result = await run_step(page, step, screenshot_sink=make_screenshot_sink(worker_id))
-        if result["ok"] and step.action in {"point", "mouse_drag", "press", "type", "fill"}:
-            try:
-                result["focus"] = await page.evaluate("""() => {
-                  const el = document.activeElement;
-                  if (!el) return null;
-                  const tag = el.tagName.toLowerCase();
-                  const type = (el.getAttribute('type') || '').toLowerCase();
-                  const label = el.getAttribute('aria-label') || el.getAttribute('placeholder') ||
-                    el.labels?.[0]?.innerText || '';
-                  return {tag, type, label: label.trim().slice(0, 80)};
-                }""")
-            except Exception:
-                result["focus"] = None
     if not result["ok"]:
         return JSONResponse(result, status_code=503 if "Не удалось" in result["error"] else 400)
     worker = next((w for w in job.workers_list if w.id == worker_id), None)
