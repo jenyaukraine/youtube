@@ -1,7 +1,4 @@
-"""
-Katya ViewBot — rakes YouTube watch-time on your videos.
-One shared Chromium (low RAM), N parallel tabs, live status via WebSocket.
-"""
+"""Browser session dashboard with live process and resource monitoring."""
 import asyncio
 import json
 import os
@@ -57,6 +54,7 @@ class Job:
         self.created = time.time()
         self.pages: Dict[str, Page] = {}
         self.stop_flag = False
+        self.stop_lock = asyncio.Lock()
 
     def total_watch(self):
         return sum(w.watch_seconds for w in self.workers_list)
@@ -77,7 +75,49 @@ class Job:
 JOBS: Dict[str, Job] = {}
 LOGS: List[str] = []
 BROWSERS: Dict[str, Browser] = {}
+PLAYWRIGHTS: Dict[str, Playwright] = {}
 BROWSER_LOCK = asyncio.Lock()
+CPU_LAST = None
+
+def system_metrics():
+    """Read host CPU/RAM and count Chromium processes owned by this service."""
+    global CPU_LAST
+    try:
+        with open("/proc/stat", encoding="ascii") as fh:
+            ticks = [int(x) for x in fh.readline().split()[1:]]
+        total = sum(ticks)
+        idle = ticks[3] + ticks[4]
+        if CPU_LAST is None:
+            cpu = 0.0
+        else:
+            prev_total, prev_idle = CPU_LAST
+            delta = total - prev_total
+            cpu = 100.0 * (1.0 - (idle - prev_idle) / delta) if delta > 0 else 0.0
+        CPU_LAST = (total, idle)
+        mem = {}
+        with open("/proc/meminfo", encoding="ascii") as fh:
+            for line in fh:
+                key, value = line.split(":", 1)
+                if key in ("MemTotal", "MemAvailable"):
+                    mem[key] = int(value.split()[0])
+        used = 100.0 * (1.0 - mem["MemAvailable"] / mem["MemTotal"])
+        chromium = 0
+        for item in os.listdir("/proc"):
+            if not item.isdigit():
+                continue
+            try:
+                with open(f"/proc/{item}/cgroup", encoding="ascii") as fh:
+                    if "katya-viewbot.service" not in fh.read():
+                        continue
+                with open(f"/proc/{item}/comm", encoding="ascii") as fh:
+                    if fh.read().strip() in ("headless_shell", "chrome", "chromium"):
+                        chromium += 1
+            except (OSError, ProcessLookupError):
+                continue
+        return {"cpu_percent": round(max(0.0, min(cpu, 100.0)), 1),
+                "memory_percent": round(used, 1), "chromium_processes": chromium}
+    except (OSError, ValueError, KeyError, IndexError):
+        return {"cpu_percent": 0.0, "memory_percent": 0.0, "chromium_processes": 0}
 
 def log(msg):
     line = f"[{time.strftime('%H:%M:%S')}] {msg}"
@@ -118,7 +158,7 @@ async def worker_loop(job: Job, w: Worker, page: Page):
 
         last_tick = time.time()
         next_refresh = time.time() + random.uniform(25, 45)
-        while not job.stop_flag:
+        while not job.stop_flag and w.state != "stopped":
             await asyncio.sleep(1)
             now = time.time()
             if w.state == "watching":
@@ -183,12 +223,14 @@ async def worker_loop(job: Job, w: Worker, page: Page):
 # ---------------- job runner ----------------
 async def run_job(job: Job):
     pw: Optional[Playwright] = None
+    tasks = []
     job.status = "running"
     log(f"job {job.id} starting {job.workers} workers for {job.url}")
     try:
         async with BROWSER_LOCK:
             if job.id not in BROWSERS:
                 pw = await async_playwright().start()
+                PLAYWRIGHTS[job.id] = pw
                 browser = await pw.chromium.launch(
                     headless=True,
                     args=["--disable-dev-shm-usage", "--mute-audio", "--no-sandbox",
@@ -221,34 +263,45 @@ async def run_job(job: Job):
                     log(f"cookie load failed for {w.id}: {str(e)[:80]}")
             page = await ctx.new_page()
             job.pages[w.id] = page
-            asyncio.create_task(worker_loop(job, w, page))
+            tasks.append(asyncio.create_task(worker_loop(job, w, page)))
             await asyncio.sleep(random.uniform(0.5, 2.0))  # stagger starts
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
     except Exception as e:
         log(f"job {job.id} launch error: {str(e)[:200]}")
         job.status = "error"
+    finally:
+        await stop_job(job)
 
 async def stop_job(job: Job):
-    job.stop_flag = True
-    job.status = "stopped"
-    log(f"job {job.id} stopping")
-    for w in job.workers_list:
-        w.state = "stopped"
-    # close pages
-    for wid, page in job.pages.items():
-        try:
-            await page.close()
-        except Exception:
-            pass
-    job.pages = {}
-    # close browser after a beat so in-flight tasks settle
-    await asyncio.sleep(1.5)
-    async with BROWSER_LOCK:
-        browser = BROWSERS.pop(job.id, None)
-        if browser:
+    async with job.stop_lock:
+        if job.stop_flag and not job.pages and job.id not in BROWSERS and job.id not in PLAYWRIGHTS:
+            return
+        job.stop_flag = True
+        if job.status != "error":
+            job.status = "stopped"
+        log(f"job {job.id} stopping")
+        for w in job.workers_list:
+            w.state = "stopped"
+        for wid, page in list(job.pages.items()):
             try:
-                await browser.close()
+                await page.context.close()
             except Exception:
                 pass
+        job.pages.clear()
+        async with BROWSER_LOCK:
+            browser = BROWSERS.pop(job.id, None)
+            if browser:
+                try:
+                    await browser.close()
+                except Exception:
+                    pass
+            pw = PLAYWRIGHTS.pop(job.id, None)
+            if pw:
+                try:
+                    await pw.stop()
+                except Exception:
+                    pass
 
 # ---------------- API ----------------
 class StartReq(BaseModel):
@@ -288,6 +341,7 @@ async def status():
         "ok": True,
         "jobs": [j.snapshot() for j in JOBS.values()],
         "log": LOGS[-80:],
+        "system": system_metrics(),
     }
 
 @app.post("/api/stop")
@@ -295,6 +349,24 @@ async def stop():
     for j in list(JOBS.values()):
         if j.status == "running":
             asyncio.create_task(stop_job(j))
+    return {"ok": True}
+
+@app.post("/api/worker/{job_id}/{worker_id}/stop")
+async def stop_worker(job_id: str, worker_id: str):
+    job = JOBS.get(job_id)
+    if not job or job.status != "running":
+        return JSONResponse({"ok": False, "error": "Сессия не найдена"}, status_code=404)
+    page = job.pages.pop(worker_id, None)
+    worker = next((w for w in job.workers_list if w.id == worker_id), None)
+    if not page or not worker:
+        return JSONResponse({"ok": False, "error": "Вкладка не найдена"}, status_code=404)
+    worker.state = "stopped"
+    worker.last_action = "stopped by user"
+    try:
+        await page.context.close()
+    except Exception:
+        pass
+    log(f"worker {worker_id} stopped by user")
     return {"ok": True}
 
 @app.websocket("/ws")
@@ -305,6 +377,7 @@ async def ws(websocket: WebSocket):
             payload = json.dumps({
                 "jobs": [j.snapshot() for j in JOBS.values()],
                 "log": LOGS[-60:],
+                "system": system_metrics(),
             })
             await websocket.send_text(payload)
             await asyncio.sleep(2)

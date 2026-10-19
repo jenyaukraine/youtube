@@ -205,6 +205,11 @@ input::placeholder{color:#738198}.hint{font-size:11.5px;color:var(--txt3);line-h
 .promo-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:17px}
 .promo-actions button{cursor:pointer;border-radius:10px;padding:10px 13px;background:#1a2430;border:1px solid #506054;color:var(--txt);font:700 11px 'Manrope',sans-serif;transition:background .2s,border-color .2s}
 .promo-actions button:hover{background:#26352e;border-color:var(--green)}
+.system-panel{margin-top:18px;padding:18px 20px;border:1px solid #394456;border-radius:15px;background:#111722}
+.system-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px}.system-head h3{font-size:13px}.system-head strong{font:700 25px 'JetBrains Mono',monospace;color:var(--green)}
+.system-chart{display:block;width:100%;height:112px;margin:12px 0 5px;overflow:visible}.system-chart .grid-line{stroke:#354050;stroke-width:1;stroke-dasharray:3 6}.system-chart .cpu-line{fill:none;stroke:var(--green);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}.system-chart .cpu-area{fill:rgba(167,243,107,.11)}
+.system-foot{display:flex;gap:15px;flex-wrap:wrap;font-size:11px;color:var(--txt3)}.system-foot b{color:var(--txt2);font-weight:800}
+.worker-stop{border:1px solid #5c4b54;border-radius:8px;background:#261c25;color:#ff9ba3;padding:7px 9px;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-stop:hover{background:#38242b;border-color:var(--red)}
 footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:#475567}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.goal{align-items:stretch}.goal .pct{margin-left:0}.wrap{padding:22px 18px 45px}}
 @media(max-width:600px){header{align-items:flex-start}.brand h1{font-size:20px}.brand p{font-size:11px}.logo{width:48px;height:48px}.badge{font-size:10px;padding:9px 10px}.badge .dot{width:8px;height:8px}.goal{padding:24px}.goal .big{font-size:43px}.goal .pct{width:100%}.card{padding:20px}.totals{grid-template-columns:1fr 1fr}.tile:last-child{grid-column:span 2}.worker{flex-wrap:wrap}.worker .act{order:3;text-align:left;flex-basis:100%}}
@@ -247,7 +252,7 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
     <div class="card">
       <h2>Запуск</h2>
       <label>Ссылка на видео</label>
-      <input type="text" id="url" placeholder="https://youtu.be/xxxxxxxxx" spellcheck="false">
+      <input type="text" id="url" name="katya_video_link" autocomplete="off" autocapitalize="off" placeholder="https://youtu.be/xxxxxxxxx" spellcheck="false">
       <div class="hint">Поддерживаются: youtu.be / youtube.com/watch?v= / shorts / embed</div>
 
       <label>Потоков (параллельных окон)</label>
@@ -290,6 +295,14 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
           <div class="t-val a" id="tErr">0</div>
         </div>
       </div>
+      <div class="system-panel">
+        <div class="system-head"><h3>Нагрузка сервера</h3><strong id="cpuValue">0%</strong></div>
+        <svg class="system-chart" viewBox="0 0 600 112" preserveAspectRatio="none" aria-label="График загрузки CPU">
+          <path class="grid-line" d="M0 28 H600 M0 56 H600 M0 84 H600"/>
+          <path class="cpu-area" id="cpuArea" d=""/><path class="cpu-line" id="cpuLine" d=""/>
+        </svg>
+        <div class="system-foot"><span>RAM <b id="ramValue">0%</b></span><span>Chromium-процессов <b id="browserValue">0</b></span><span>Обновление каждые 2 с</span></div>
+      </div>
       <div class="promo-kit">
         <h3>Поделиться релизом</h3>
         <p>Вставь ссылку на техно-видео слева — здесь можно быстро открыть ролик, скопировать ссылку или готовый текст для поста.</p>
@@ -312,6 +325,8 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
 <script>
 const $ = id => document.getElementById(id);
 let ws, wsAlive = false, curJob = null, tick = 0;
+const cpuSamples = [];
+window.addEventListener('pageshow', () => setTimeout(() => { if ($('url').value.trim().toLowerCase() === 'admin') $('url').value = ''; }, 100));
 
 // sliders
 const wr = $('workers');
@@ -360,6 +375,16 @@ async function stopAll(){
 $('btnStart').onclick = start;
 $('btnStop').onclick = stopAll;
 $('url').addEventListener('keydown', e => { if(e.key==='Enter') start(); });
+$('workersPanel').addEventListener('click', async e => {
+  const button = e.target.closest('.worker-stop');
+  if(!button) return;
+  button.disabled = true;
+  try {
+    const r = await fetch(`/api/worker/${encodeURIComponent(button.dataset.job)}/${encodeURIComponent(button.dataset.worker)}/stop`,{method:'POST'});
+    const data = await r.json();
+    toast(data.ok ? 'Вкладка закрыта' : (data.error || 'Не удалось закрыть вкладку'),data.ok ? 'ok' : 'err');
+  } catch { toast('Нет связи с сервером','err'); }
+});
 
 function promoUrl(){
   const raw = $('url').value.trim();
@@ -378,8 +403,21 @@ $('promoShare').onclick = async () => { const url=promoUrl(); if(!url) return; i
 
 function fmtH(s){ return (s/3600).toFixed(3); }
 function escapeHtml(value){ return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function renderSystem(system){
+  if(!system) return;
+  const cpu = Math.max(0,Math.min(100,Number(system.cpu_percent)||0));
+  cpuSamples.push(cpu); if(cpuSamples.length > 60) cpuSamples.shift();
+  $('cpuValue').textContent = cpu.toFixed(1) + '%';
+  $('ramValue').textContent = (Number(system.memory_percent)||0).toFixed(1) + '%';
+  $('browserValue').textContent = Number(system.chromium_processes)||0;
+  const points = cpuSamples.map((value,i) => `${(i/59*600).toFixed(1)},${(108-value*1.04).toFixed(1)}`);
+  const line = points.length ? 'M'+points.join(' L') : '';
+  $('cpuLine').setAttribute('d', line);
+  $('cpuArea').setAttribute('d', line ? line+' L'+((cpuSamples.length-1)/59*600).toFixed(1)+',112 L0,112 Z' : '');
+}
 
 function render(data){
+  renderSystem(data.system);
   const jobs = data.jobs || [];
   const active = jobs.filter(j=>j.status==='running');
   let total = 0, errs = 0, anyRunning = false;
@@ -412,6 +450,7 @@ function render(data){
         <span class="name">W-${w.id.split('-').pop()}</span>
         <span class="act">${escapeHtml(w.last_action || w.state)}${w.error ? ' · '+escapeHtml(w.error) : ''}</span>
         <span class="secs">${(w.watch_seconds/3600).toFixed(3)} ч</span>
+        <button type="button" class="worker-stop" data-job="${escapeHtml(w._j.id)}" data-worker="${escapeHtml(w.id)}">Закрыть</button>
       </div>`).join('');
   }
 
