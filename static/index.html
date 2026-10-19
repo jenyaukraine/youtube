@@ -766,8 +766,9 @@ $('workersPanel').addEventListener('click', async e => {
     const job=card.querySelector('.worker-stop').dataset.job, control_token=sessionStorage.getItem('katya_control_'+job)||'';
     const r=await apiFetch('/api/macros',{method:'POST',headers:{'X-Katya-Job':job,'X-Katya-Control-Token':control_token},body:JSON.stringify({name,steps:card._steps,description:startUrl})});
     if(r.ok) loadMacros();
-    e.target.textContent='✓ Сохранено'; setTimeout(()=>{ if(e.target.isConnected) e.target.textContent='💾 Сохранить сценарий'; },2500);
-    toast(`Сохранено: ${name}. Запускай через «Сценарий при открытии» или раздел «Сценарии»`);
+    e.target.textContent=r.ok?'✓ Сохранено':'Сохранить сценарий';
+    if(r.ok) setTimeout(()=>{ if(e.target.isConnected) e.target.textContent='💾 Сохранить сценарий'; },2500);
+    toast(r.ok?`Сохранено на сервере: ${name}`:`Сохранено только в этом браузере; сервер: ${r.error||'ошибка'}`,r.ok?'ok':'err');
     return;
   }
   if(e.target.matches('.record-toggle,.record-replay,.record-copy,.record-clear')){
@@ -1079,7 +1080,7 @@ async function loadMacros(){
 function startSteps(){
   const choice=$('startScenario').value; if(!choice) return [];
   const source=choice.startsWith('scenario:')?localList(SCENARIO_STORE).find(s=>s.id===choice.slice(9)):MACROS.find(m=>m.name===choice.slice(6));
-  return (source?.steps||[]).map(({action,kind,query,role,value,x,y,end_x,end_y,nth,timeout_ms,optional,name})=>({action,kind,query,role,value,x,y,end_x,end_y,nth,timeout_ms,optional,name}));
+  return (source?.steps||[]).map(({action,kind,query,role,value,replace,x,y,end_x,end_y,nth,timeout_ms,optional,name})=>({action,kind,query,role,value,replace,x,y,end_x,end_y,nth,timeout_ms,optional,name}));
 }
 function fillStartScenario(){
   const select=$('startScenario'), current=select.value;
