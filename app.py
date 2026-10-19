@@ -28,6 +28,12 @@ DATA = os.environ.get("KATYA_DATA_DIR", os.path.join(ROOT, "data"))
 FILES_DIR = os.path.join(DATA, "files")
 MACROS_PATH = os.path.join(DATA, "macros.json")
 HEADLESS = os.environ.get("KATYA_HEADLESS", "1") not in ("0", "false", "no")
+BROWSER_CHANNEL = os.environ.get("KATYA_BROWSER_CHANNEL", "").strip()
+if not BROWSER_CHANNEL and os.name == "nt":
+    chrome_path = os.path.join(os.environ.get("PROGRAMFILES", r"C:\Program Files"),
+                               "Google", "Chrome", "Application", "chrome.exe")
+    if os.path.isfile(chrome_path):
+        BROWSER_CHANNEL = "chrome"
 MAX_WORKERS = max(1, min(int(os.environ.get("KATYA_MAX_TABS", "8")), 64))
 os.makedirs(FILES_DIR, exist_ok=True)
 
@@ -226,13 +232,17 @@ def cookies_from_string(s: str) -> List[dict]:
 PLAYBACK_JS = r"""() => {
   const text = document.body?.innerText || '';
   const video = document.querySelector('video');
+  const playerError = document.querySelector('.ytp-error-content');
+  const visibleError = playerError && playerError.getClientRects().length
+    ? playerError.innerText.trim().slice(0, 180) : '';
   return {
     consent: location.hostname.startsWith('consent.') ||
       (/(^|\.)youtube\.com$/.test(location.hostname) &&
        /Прежде чем перейти к YouTube|Before you continue to YouTube|Bevor Sie zu YouTube weitergehen|Avant de continuer sur YouTube|Перш ніж перейти на YouTube|Принять все|Accept all|Alle akzeptieren/i.test(text)),
     time: video ? video.currentTime : null,
     paused: video ? video.paused : true,
-    ready: video ? video.readyState : 0
+    ready: video ? video.readyState : 0,
+    error: visibleError || (video?.error ? `Media error ${video.error.code}` : '')
   };
 }"""
 
@@ -262,6 +272,10 @@ async def worker_loop(job: Job, w: Worker, page: Page):
                 if playback["consent"]:
                     w.state = "blocked"
                     w.last_action = "Окно согласия YouTube"
+                elif playback["error"]:
+                    w.state = "error"
+                    w.error = playback["error"]
+                    w.last_action = "Ошибка видеоплеера"
                 elif video_time is None:
                     w.state = "ready"
                     w.last_action = "Страница открыта"
@@ -272,6 +286,8 @@ async def worker_loop(job: Job, w: Worker, page: Page):
                 else:
                     w.state = "paused"
                     w.last_action = "Видео не воспроизводится"
+                if not playback["error"]:
+                    w.error = ""
                 last_video_time = video_time
             except Exception as e:
                 w.state = "checking"
@@ -304,12 +320,9 @@ async def worker_loop(job: Job, w: Worker, page: Page):
 
 
 # ---------------- job runner ----------------
-LAUNCH_ARGS = ["--disable-dev-shm-usage", "--mute-audio", "--no-sandbox",
-               "--autoplay-policy=no-user-gesture-required",
-               "--disable-extensions", "--disable-background-networking",
-               "--disable-background-timer-throttling", "--disable-backgrounding-occluded-windows",
-               "--disable-renderer-backgrounding", "--disable-features=CalculateNativeWinOcclusion",
-               "--force-color-profile=srgb", "--hide-scrollbars"]
+LAUNCH_ARGS = ["--mute-audio"]
+if os.name != "nt":
+    LAUNCH_ARGS += ["--disable-dev-shm-usage", "--no-sandbox"]
 if os.environ.get("KATYA_LOW_MEMORY", "0") == "1":
     LAUNCH_ARGS += ["--disable-gpu", "--renderer-process-limit=2", "--js-flags=--max-old-space-size=180"]
 
@@ -346,7 +359,10 @@ async def run_job(job: Job):
             if job.id not in BROWSERS:
                 pw = await async_playwright().start()
                 PLAYWRIGHTS[job.id] = pw
-                BROWSERS[job.id] = await pw.chromium.launch(headless=HEADLESS, args=LAUNCH_ARGS)
+                launch_options = {"headless": HEADLESS, "args": LAUNCH_ARGS}
+                if BROWSER_CHANNEL:
+                    launch_options["channel"] = BROWSER_CHANNEL
+                BROWSERS[job.id] = await pw.chromium.launch(**launch_options)
         browser = BROWSERS[job.id]
         language_header = next((value for name, value in job.headers.items() if name.lower() == "accept-language"), "")
         requested_locale = language_header.split(",", 1)[0].split(";", 1)[0].strip()
@@ -358,7 +374,7 @@ async def run_job(job: Job):
             profile = None
             if job.profile:
                 profile = find_profile(job.profile)
-            elif job.user_agent_mode in {"chrome", "random"}:
+            elif job.user_agent_mode in {"chrome", "random"} and not (BROWSER_CHANNEL == "chrome" and job.user_agent_mode == "chrome"):
                 names = ("Desktop Chrome", "Desktop Edge") if job.user_agent_mode == "random" else ("Desktop Chrome",)
                 available = [name for name in names if name in PLAYWRIGHTS[job.id].devices]
                 if available:
@@ -366,7 +382,7 @@ async def run_job(job: Job):
                     profile = {**PLAYWRIGHTS[job.id].devices[name], "name": name}
             w = Worker(f"{job.id}-{i}", job.url, cookies=job.cookies,
                        ua=profile["user_agent"] if profile else None,
-                       profile=profile["name"] if profile else "")
+                       profile=profile["name"] if profile else ("Installed Chrome" if BROWSER_CHANNEL == "chrome" else ""))
             job.workers_list.append(w)
             # Each tab has an isolated browser context and its own identity profile.
             ctx = await browser.new_context(
@@ -381,6 +397,8 @@ async def run_job(job: Job):
                 except Exception as e:
                     log(f"cookie load failed for {w.id}: {str(e)[:80]}")
             page = await ctx.new_page()
+            if BROWSER_CHANNEL == "chrome" and job.user_agent_mode == "chrome":
+                w.ua = await page.evaluate("navigator.userAgent")
             attach_page_handlers(job, w, page)
             job.pages[w.id] = page
             task = asyncio.create_task(worker_loop(job, w, page))

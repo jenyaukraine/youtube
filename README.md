@@ -12,7 +12,7 @@ playback and is **not** verified YouTube watch time.
 Install Python 3.11+ from python.org (tick "Add to PATH"), then double-click:
 
 - `Start-Katya.bat` — creates `.venv`, installs dependencies and Chromium on first run, then starts the app on
-  <http://127.0.0.1:8010/>. Browser windows are visible by default (`KATYA_HEADLESS=0`); up to 32 tabs (`KATYA_MAX_TABS`).
+  <http://127.0.0.1:8010/>. Browser windows are visible by default (`KATYA_HEADLESS=0`); up to 32 tabs (`KATYA_MAX_TABS`). On Windows, installed Chrome is used when available; set `KATYA_BROWSER_CHANNEL` to choose another Playwright channel. Each session uses a separate browser profile.
 - `Katya-MCP.bat` — MCP server for AI agents (see below). The app must already be running.
 
 The API token for agents is generated on first start and stored in `data/api_token.txt`. Paste it into the

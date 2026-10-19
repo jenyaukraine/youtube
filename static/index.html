@@ -318,8 +318,8 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
       </div>
 
       <label for="uaMode">Профиль браузера для каждой вкладки</label>
-      <select id="uaMode" aria-label="Профиль браузера"><option value="chrome">Chrome той же версии, что движок</option><option value="random">Случайный Chrome или Edge</option><option value="browser">Chromium без профиля</option></select>
-      <div class="hint">Версия профиля берётся из установленного Playwright. Профиль выбирается при открытии вкладки.</div>
+      <select id="uaMode" aria-label="Профиль браузера"><option value="chrome">Chrome без подмены версии</option><option value="random">Случайный Chrome или Edge</option><option value="browser">Браузер без профиля</option></select>
+      <div class="hint">На ПК используется установленный Chrome, на сервере — Chromium Playwright. Для каждого запуска создаётся отдельная сессия.</div>
 
       <details class="advanced"><summary>HTTP-заголовки для новых вкладок</summary>
         <textarea id="customHeaders" spellcheck="false" placeholder='{"Accept-Language":"ru-RU,ru;q=0.9"}'></textarea>
@@ -933,7 +933,8 @@ function render(data){
       }
       card.querySelector('.st').className = 'st ' + w.state;
       card.querySelector('.name').textContent = 'W-' + w.id.split('-').pop();
-      card.querySelector('.act').textContent = w.last_action || w.state;
+      card.querySelector('.act').textContent = w.state === 'error' && w.error ? w.error.slice(0, 110) : (w.last_action || w.state);
+      card.querySelector('.act').title = w.error || '';
       card.querySelector('.secs').textContent = (w.watch_seconds/3600).toFixed(3) + ' ч';
       card.querySelector('.worker-url').textContent = w.url || w._j.url;
       card.querySelectorAll('.worker-actions button').forEach(button => { button.dataset.job = w._j.id; button.dataset.worker = w.id; });
