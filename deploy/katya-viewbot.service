@@ -1,0 +1,17 @@
+[Unit]
+Description=Katya ViewBot - YouTube watch-time bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/katya-viewbot
+ExecStart=/usr/bin/python3 /opt/katya-viewbot/app.py
+Restart=always
+RestartSec=4
+MemoryHigh=2200M
+MemoryMax=2600M
+Environment=PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+
+[Install]
+WantedBy=multi-user.target

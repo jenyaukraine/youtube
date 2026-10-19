@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Katya ViewBot — YouTube Watch Time</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0f0c;
+  --bg2:#0e1511;
+  --card:#111a15;
+  --card2:#152019;
+  --line:#1e2c24;
+  --line2:#27392e;
+  --txt:#e8f2ec;
+  --txt2:#9db5a6;
+  --txt3:#5f7a6c;
+  --green:#8ce99a;
+  --green2:#57cc7c;
+  --green-dim:rgba(140,233,154,.14);
+  --green-glow:rgba(140,233,154,.35);
+  --amber:#f2c94c;
+  --red:#eb4444;
+  --radius:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--bg);
+  color:var(--txt);
+  font-family:'Manrope',system-ui,sans-serif;
+  overflow-x:hidden;
+}
+/* ambient background */
+.bg-fx{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(600px 400px at 85% -10%, rgba(140,233,154,.07), transparent 60%),
+    radial-gradient(500px 500px at -10% 110%, rgba(87,204,124,.05), transparent 60%);
+}
+.bg-fx::after{content:"";position:absolute;inset:0;
+  background-image:linear-gradient(var(--line) 1px, transparent 1px),linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size:44px 44px;opacity:.14;
+  mask-image:radial-gradient(ellipse at center, black 30%, transparent 75%);
+}
+.wrap{position:relative;z-index:1;max-width:1060px;margin:0 auto;padding:28px 20px 60px}
+
+/* header */
+header{display:flex;align-items:center;justify-content:space-between;padding:6px 4px 22px}
+.brand{display:flex;align-items:center;gap:14px}
+.logo{width:44px;height:44px;border-radius:12px;background:var(--green-dim);border:1px solid var(--line2);
+  display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.logo svg{width:24px;height:24px}
+.brand h1{font-size:19px;font-weight:800;letter-spacing:-.02em}
+.brand h1 span{color:var(--green)}
+.brand p{font-size:12px;color:var(--txt3);margin-top:2px}
+.badge{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt2);
+  background:var(--card);border:1px solid var(--line);padding:8px 14px;border-radius:999px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green-glow)}
+.dot.busy{background:var(--amber);box-shadow:0 0 8px rgba(242,201,76,.5)}
+
+/* goal banner */
+.goal{background:linear-gradient(135deg, var(--card) 0%, var(--card2) 100%);
+  border:1px solid var(--line2);border-radius:var(--radius);padding:20px 22px;margin-bottom:20px;
+  display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.goal .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.14em;color:var(--txt3)}
+.goal .big{font-size:34px;font-weight:800;letter-spacing:-.03em;line-height:1.1;color:var(--green)}
+.goal .big small{font-size:14px;color:var(--txt2);font-weight:600}
+.goal .sub{font-size:12.5px;color:var(--txt2);margin-top:4px;max-width:320px}
+.goal .pct{margin-left:auto;text-align:right}
+.bar{width:220px;height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--green2),var(--green));
+  border-radius:99px;transition:width .8s cubic-bezier(.22,1,.36,1)}
+
+/* grid */
+.grid{display:grid;grid-template-columns:380px 1fr;gap:20px}
+@media(max-width:860px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--txt2);margin-bottom:16px;
+  display:flex;align-items:center;gap:8px}
+.card h2::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--green)}
+
+label{display:block;font-size:12px;color:var(--txt2);margin:14px 0 7px;font-weight:600}
+label:first-child{margin-top:0}
+input[type=text],input[type=password]{
+  width:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:10px;
+  color:var(--txt);padding:11px 13px;font-size:13.5px;font-family:'JetBrains+Mono',monospace;
+  outline:none;transition:border-color .2s, box-shadow .2s;
+}
+input[type=text]:focus,input[type=password]:focus{border-color:var(--green2);box-shadow:0 0 0 3px var(--green-dim)}
+input::placeholder{color:var(--txt3)}
+.hint{font-size:11px;color:var(--txt3);margin-top:6px;line-height:1.5}
+
+/* slider */
+.slider-row{display:flex;align-items:center;gap:14px}
+input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:6px;background:var(--line2);border-radius:99px;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;
+  background:var(--green);cursor:pointer;box-shadow:0 0 10px var(--green-glow)}
+.slider-val{min-width:52px;text-align:center;font-family:'JetBrains+Mono',monospace;font-size:15px;font-weight:600;
+  color:var(--green);background:var(--green-dim);border-radius:8px;padding:5px 0}
+
+/* duration select */
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:70px;background:var(--bg2);border:1px solid var(--line2);color:var(--txt2);
+  padding:9px 0;border-radius:9px;font-size:12px;font-family:'Manrope';font-weight:600;cursor:pointer;transition:all .15s}
+.seg button.on{background:var(--green-dim);border-color:var(--green2);color:var(--green)}
+.seg button:hover{border-color:var(--green2)}
+
+/* buttons */
+.btn-row{display:flex;gap:10px;margin-top:20px}
+.btn{flex:1;border:none;border-radius:11px;padding:14px 0;font-size:14px;font-weight:700;cursor:pointer;
+  font-family:'Manrope';transition:all .18s;letter-spacing:.01em}
+.btn-go{background:linear-gradient(135deg,var(--green2),var(--green));color:#0a120d;
+  box-shadow:0 6px 24px rgba(140,233,154,.25)}
+.btn-go:hover{transform:translateY(-1px);box-shadow:0 10px 30px rgba(140,233,154,.4)}
+.btn-go:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-stop{background:var(--bg2);border:1px solid var(--line2);color:var(--txt2)}
+.btn-stop:hover{border-color:var(--red);color:var(--red)}
+.btn-stop:disabled{opacity:.35;cursor:not-allowed}
+
+/* workers panel */
+.workers{display:flex;flex-direction:column;gap:10px}
+.worker{display:flex;align-items:center;gap:12px;background:var(--bg2);border:1px solid var(--line);
+  border-radius:11px;padding:12px 14px;animation:pop .35s cubic-bezier(.22,1,.36,1)}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+.worker .st{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.st.watching{background:var(--green);box-shadow:0 0 8px var(--green-glow);animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.st.starting,.st.reloading{background:var(--amber);box-shadow:0 0 8px rgba(242,201,76,.4)}
+.st.error{background:var(--red)}
+.st.stopped{background:var(--txt3)}
+.worker .name{font-family:'JetBrains+Mono',monospace;font-size:12px;color:var(--txt2)}
+.worker .act{font-size:11.5px;color:var(--txt3);flex:1;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.worker .secs{font-family:'JetBrains+Mono',monospace;font-size:12.5px;color:var(--green);min-width:70px;text-align:right}
+.empty{color:var(--txt3);font-size:13px;text-align:center;padding:34px 0;line-height:1.7}
+.empty b{color:var(--txt2)}
+
+/* log console */
+.log{background:#060b08;border:1px solid var(--line);border-radius:11px;padding:12px 14px;
+  font-family:'JetBrains+Mono',monospace;font-size:11.5px;color:var(--txt3);
+  max-height:180px;overflow-y:auto;line-height:1.75;margin-top:18px}
+.log .l{white-space:pre-wrap}
+.log .l b{color:var(--txt2);font-weight:500}
+.log::-webkit-scrollbar{width:6px}
+.log::-webkit-scrollbar-thumb{background:var(--line2);border-radius:99px}
+
+/* totals strip */
+.totals{display:flex;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.tile{flex:1;min-width:150px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.tile .t-lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--txt3)}
+.tile .t-val{font-size:24px;font-weight:800;letter-spacing:-.02em;margin-top:6px;font-family:'JetBrains+Mono',monospace}
+.tile .t-val.g{color:var(--green)}
+.tile .t-val.a{color:var(--amber)}
+
+footer{margin-top:26px;text-align:center;font-size:11.5px;color:var(--txt3)}
+footer b{color:var(--txt2)}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;
+  background:var(--card2);border:1px solid var(--line2);border-radius:12px;padding:12px 20px;
+  font-size:13px;z-index:10;transition:all .3s;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{border-color:var(--red);color:var(--red)}
+.toast.ok{border-color:var(--green2);color:var(--green)}
+</style>
+</head>
+<body>
+<div class="bg-fx"></div>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#8ce99a" stroke-width="2" stroke-linecap="round">
+          <path d="M3 12h4l2-7 4 14 2-7h6"/>
+        </svg>
+      </div>
+      <div>
+        <h1>Katya <span>ViewBot</span></h1>
+        <p>Накрутка watch time для монетизации</p>
+      </div>
+    </div>
+    <div class="badge"><span class="dot" id="connDot"></span><span id="connTxt">подключение…</span></div>
+  </header>
+
+  <div class="goal">
+    <div>
+      <div class="lbl">Watch time (накручено)</div>
+      <div class="big"><span id="goalHours">0.000</span> <small>/ 4 000 ч</small></div>
+      <div class="sub">Порог монетизации YouTube: 4 000 часов просмотра за 12 месяцев. Счётчик ниже — за текущую сессию.</div>
+    </div>
+    <div class="pct">
+      <div style="font-size:11px;color:var(--txt3)">ПРОГРЕСС СЕССИИ</div>
+      <div class="bar"><i id="goalBar"></i></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- CONTROL CARD -->
+    <div class="card">
+      <h2>Запуск</h2>
+      <label>Ссылка на видео</label>
+      <input type="text" id="url" placeholder="https://youtu.be/xxxxxxxxx" spellcheck="false">
+      <div class="hint">Поддерживаются: youtu.be / youtube.com/watch?v= / shorts / embed</div>
+
+      <label>Потоков (параллельных окон)</label>
+      <div class="slider-row">
+        <input type="range" id="workers" min="1" max="8" value="3">
+        <div class="slider-val" id="workersVal">3</div>
+      </div>
+
+      <label>Длительность сессии</label>
+      <div class="seg" id="durSeg">
+        <button data-d="0" class="on">Без лимита</button>
+        <button data-d="1800">30 мин</button>
+        <button data-d="3600">1 час</button>
+      </div>
+
+      <label>Cookie для аккаунта (опционально)</label>
+      <input type="password" id="cookies" placeholder="Скопируй cookie из браузера…">
+      <div class="hint">С cookie бот заходит как твой аккаунт — просмотры считаются «своими», сильнее бьют по watch time. Без cookie — анонимные просмотры.</div>
+
+      <div class="btn-row">
+        <button class="btn btn-go" id="btnStart">Запустить</button>
+        <button class="btn btn-stop" id="btnStop" disabled>Стоп</button>
+      </div>
+    </div>
+
+    <!-- WORKERS CARD -->
+    <div class="card">
+      <h2>Потоки</h2>
+      <div class="workers" id="workersPanel">
+        <div class="empty">Пока тихо.<br><b>Вставь ссылку и жми «Запустить»</b> — тут появятся рабочие окна.</div>
+      </div>
+
+      <div class="totals">
+        <div class="tile">
+          <div class="t-lbl">Активных потоков</div>
+          <div class="t-val g" id="tActive">0</div>
+        </div>
+        <div class="tile">
+          <div class="t-lbl">Watch time сессии</div>
+          <div class="t-val g" id="tHours">0.000 ч</div>
+        </div>
+        <div class="tile">
+          <div class="t-lbl">Ошибок</div>
+          <div class="t-val a" id="tErr">0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="log" id="logBox"></div>
+
+  <footer>Katya <b>ViewBot</b> · один Chromium, N вкладок · headless · <span id="uptime">0</span> с на работе</footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let ws, wsAlive = false, curJob = null, tick = 0;
+
+// sliders
+const wr = $('workers');
+wr.addEventListener('input', () => $('workersVal').textContent = wr.value);
+
+// duration seg
+let duration = 0;
+document.querySelectorAll('#durSeg button').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('#durSeg button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    duration = +b.dataset.d;
+  };
+});
+
+function toast(msg, type='ok'){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.className = 'toast', 3200);
+}
+
+async function start(){
+  const url = $('url').value.trim();
+  if(!url){ toast('Вставь ссылку на видео','err'); return; }
+  $('btnStart').disabled = true;
+  try{
+    const r = await fetch('/api/start', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({url, workers:+wr.value, duration, cookies:$('cookies').value.trim()})
+    });
+    const j = await r.json();
+    if(!j.ok) toast(j.error || 'Ошибка запуска','err');
+    else { toast('Поехали: ' + j.workers + ' потоков','ok'); curJob = j.id; }
+  }catch(e){ toast('Нет связи с ботом: '+e.message,'err'); }
+  $('btnStart').disabled = false;
+}
+
+async function stopAll(){
+  await fetch('/api/stop',{method:'POST'});
+  toast('Останавливаю…');
+}
+
+$('btnStart').onclick = start;
+$('btnStop').onclick = stopAll;
+$('url').addEventListener('keydown', e => { if(e.key==='Enter') start(); });
+
+function fmtH(s){ return (s/3600).toFixed(3); }
+
+function render(data){
+  const jobs = data.jobs || [];
+  const active = jobs.filter(j=>j.status==='running');
+  let total = 0, errs = 0, anyRunning = false;
+  const panel = $('workersPanel');
+  const allWorkers = [];
+  active.forEach(j => (j.workers_list||[]).forEach(w => { w._j = j; allWorkers.push(w); total += w.watch_seconds; if(w.state==='error') errs++; }));
+  if(active.length) anyRunning = true;
+
+  // header
+  $('connDot').className = 'dot' + (anyRunning ? ' busy':'');
+  $('connTxt').textContent = anyRunning ? 'работает' : (wsAlive ? 'онлайн' : 'оффлайн');
+  $('btnStop').disabled = !anyRunning;
+
+  // goal
+  $('goalHours').textContent = fmtH(total);
+  $('goalBar').style.width = Math.min(100, total/3600/4000*100) + '%';
+
+  // totals
+  $('tActive').textContent = allWorkers.length;
+  $('tHours').textContent = fmtH(total) + ' ч';
+  $('tErr').textContent = errs;
+
+  // workers
+  if(!allWorkers.length){
+    panel.innerHTML = '<div class="empty">Пока тихо.<br><b>Вставь ссылку и жми «Запустить»</b> — тут появятся рабочие окна.</div>';
+  } else {
+    panel.innerHTML = allWorkers.map(w => `
+      <div class="worker">
+        <span class="st ${w.state}"></span>
+        <span class="name">W-${w.id.split('-').pop()}</span>
+        <span class="act">${w.last_action || w.state}${w.error ? ' · '+w.error : ''}</span>
+        <span class="secs">${(w.watch_seconds/3600).toFixed(3)} ч</span>
+      </div>`).join('');
+  }
+
+  // log
+  const box = $('logBox');
+  box.innerHTML = (data.log||[]).map(l => `<div class="l">${l.replace(/</g,'&lt;')}</div>`).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+function connect(){
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => { wsAlive = true; $('connTxt').textContent='онлайн'; };
+  ws.onmessage = e => { tick++; render(JSON.parse(e.data)); };
+  ws.onclose = () => { wsAlive = false; $('connTxt').textContent='переподключение…';
+    $('connDot').className='dot'; setTimeout(connect, 2500); };
+  ws.onerror = () => ws.close();
+}
+connect();
+
+let up = 0;
+setInterval(()=>{ up++; $('uptime').textContent = up; }, 1000);
+</script>
+</body>
+</html>
