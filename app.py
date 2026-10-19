@@ -452,13 +452,15 @@ async def reload_worker(job_id: str, worker_id: str):
         return JSONResponse({"ok": False, "error": "Не удалось перезагрузить вкладку"}, status_code=503)
 
 class BrowserAction(BaseModel):
-    action: Literal["click", "wait_click", "point", "inspect", "fill", "hover", "drag", "scroll", "press", "type", "navigate"]
+    action: Literal["click", "wait_click", "point", "mouse_drag", "inspect", "fill", "hover", "drag", "scroll", "press", "type", "navigate"]
     kind: Literal["css", "text", "role", "label"] = "css"
     query: str = ""
     role: str = "button"
     value: str = ""
     x: float = 0
     y: float = 0
+    end_x: float = 0
+    end_y: float = 0
     control_token: str
 
 @app.post("/api/worker/{job_id}/{worker_id}/action")
@@ -481,8 +483,10 @@ async def browser_action(job_id: str, worker_id: str, req: BrowserAction):
         return JSONResponse({"ok": False, "error": "Укажи значение действия"}, status_code=400)
     if req.action == "navigate" and not normalize_browser_url(req.value):
         return JSONResponse({"ok": False, "error": "Неверный URL"}, status_code=400)
-    if req.action in {"point", "inspect"} and not (0 <= req.x <= 1 and 0 <= req.y <= 1):
+    if req.action in {"point", "inspect", "mouse_drag"} and not (0 <= req.x <= 1 and 0 <= req.y <= 1):
         return JSONResponse({"ok": False, "error": "Точка вне вкладки"}, status_code=400)
+    if req.action == "mouse_drag" and not (0 <= req.end_x <= 1 and 0 <= req.end_y <= 1):
+        return JSONResponse({"ok": False, "error": "Конечная точка вне вкладки"}, status_code=400)
     def element(q: str):
         if req.kind == "css":
             return page.locator(q)
@@ -524,6 +528,16 @@ async def browser_action(job_id: str, worker_id: str, req: BrowserAction):
             if not viewport:
                 return JSONResponse({"ok": False, "error": "Неизвестен размер вкладки"}, status_code=400)
             await page.mouse.click(round(req.x * viewport["width"]), round(req.y * viewport["height"]))
+        elif req.action == "mouse_drag":
+            viewport = page.viewport_size
+            if not viewport:
+                return JSONResponse({"ok": False, "error": "Неизвестен размер вкладки"}, status_code=400)
+            await page.mouse.move(req.x * viewport["width"], req.y * viewport["height"])
+            await page.mouse.down()
+            try:
+                await page.mouse.move(req.end_x * viewport["width"], req.end_y * viewport["height"], steps=14)
+            finally:
+                await page.mouse.up()
         elif req.action == "navigate":
             target = normalize_browser_url(req.value)
             async with job.page_locks.setdefault(worker_id, asyncio.Lock()):
