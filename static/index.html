@@ -376,7 +376,6 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
         <div class="chrome-connection"><span id="bridgeStatus">Проверяю расширение…</span><span id="connectedTab">Вкладка не подключена</span></div>
         <details class="chrome-existing" id="chromeTabPicker"><summary>Подключить открытую вкладку</summary><div id="chromeTabList">Ищу вкладки…</div></details>
         <details class="chrome-install"><summary>Установка и обновление расширения</summary><ol><li><a href="/Katya-Browser-Bridge.zip" download>Скачать ZIP расширения ↗</a> и распаковать.</li><li>Открыть <code>chrome://extensions</code>, включить режим разработчика и загрузить распакованную папку. Если расширение уже установлено, заменить файлы в его папке и нажать «Обновить».</li><li>Войти в аккаунт вручную, открыть вкладку и нажать значок расширения → «Подключить эту вкладку».</li></ol></details>
-        <div class="chrome-repeat"><label for="chromeRepeat">Повторов сценария</label><input type="number" id="chromeRepeat" min="1" max="50" value="1"></div>
       </div>
       <div class="server-only">
       <label>Потоков (параллельных окон)</label>
@@ -421,13 +420,7 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
         <div class="chrome-media-state" id="chromeMediaState" hidden></div>
         <div class="chrome-shot empty" id="chromeShotFrame" tabindex="0" aria-label="Управление подключённой вкладкой Chrome"><img id="chromeShotImage" alt="Живой кадр вкладки Chrome" draggable="false" hidden><div id="chromeShotEmpty">Введите адрес слева и нажмите «Открыть в Chrome»</div></div>
         <div class="chrome-video-controls" id="chromeVideoControls" hidden><button type="button" id="chromeVideoPlay" aria-label="Воспроизвести или поставить на паузу">▶</button><button type="button" id="chromeVideoBack" aria-label="На 10 секунд назад">−10</button><input type="range" id="chromeVideoSeek" min="0" max="100" value="0" aria-label="Перемотка видео"><button type="button" id="chromeVideoForward" aria-label="На 10 секунд вперёд">+10</button><span id="chromeVideoTime">0:00 / 0:00</span></div>
-        <div class="chrome-scenario-summary" id="chromeScenarioSummary" hidden><div class="scenario-progress-head"><strong>Сценарий</strong><span id="chromeScenarioStatus">Готов к запуску</span></div><div class="scenario-now"><span class="scenario-now-k" id="chromeScenarioNow">Выбери шаг или запусти с начала</span></div><div class="scenario-track"><i id="chromeScenarioTrack"></i></div></div>
-        <div class="chrome-run-state" id="chromeRunState" aria-live="polite" hidden></div>
-        <div class="chrome-steps-head"><strong>Действия сценария</strong><span id="chromeStepCount">0 шагов</span></div><ol class="chrome-steps action-timeline" id="chromeStepList"></ol>
-        <div class="chrome-step-actions" id="chromeStepActions" hidden><span id="chromeSelectedStep"></span><button type="button" id="chromeRunFrom">▶ Запустить отсюда</button><button type="button" id="chromeClearStep" aria-label="Снять выбор шага">✕</button></div>
-        <div class="chrome-recorder"><button type="button" id="chromeRecord">● Записать шаги</button><button type="button" id="chromeFinish" disabled>■ Закончить</button><span id="chromeEventCount">0 действий</span></div>
-        <div class="chrome-save"><input id="chromeRecordName" type="text" placeholder="Название сценария"><button type="button" id="chromeSave">Сохранить запись</button></div><ol class="chrome-steps" id="chromeRecordedList"></ol>
-        <details class="chrome-manual"><summary>Ручное действие · CSS, текст или роль</summary><div class="chrome-manual-grid"><select id="chromeManualAction" aria-label="Действие"><option value="click">Кликнуть</option><option value="wait_click">Ждать и кликнуть</option><option value="fill">Заполнить поле</option><option value="type">Напечатать</option><option value="scroll">Прокрутить</option><option value="press">Клавиша</option><option value="hover">Навести</option><option value="dblclick">Двойной клик</option><option value="select">Выбрать option</option><option value="wait_for">Ждать появления</option><option value="wait_gone">Ждать исчезновения</option><option value="text">Прочитать текст</option><option value="navigate">Открыть URL</option><option value="reload">Обновить страницу</option><option value="back">Назад</option><option value="screenshot">Снимок</option></select><select id="chromeManualKind" aria-label="Способ поиска"><option value="css">CSS</option><option value="text">Текст</option><option value="label">Label</option><option value="role:button">Роль: кнопка</option><option value="role:link">Роль: ссылка</option><option value="placeholder">Placeholder</option><option value="xpath">XPath</option></select><input id="chromeManualQuery" placeholder="Элемент или селектор" aria-label="Элемент"><input id="chromeManualValue" placeholder="Текст, число или URL" aria-label="Значение"><button type="button" id="chromeManualRun">Выполнить</button></div></details>
+        <div id="chromeScenarioMount"></div>
       </div>
       <div id="serverWorkspace">
       <div class="workers" id="workersPanel">
@@ -628,15 +621,13 @@ const ACTION_LABELS={scroll:'Прокрутка',point:'Клик',type:'Ввод
 function renderScenario(card,worker){
   const pane=card.querySelector('.scenario-progress'),steps=worker._j.scenario_steps||[],status=worker.scenario||{};
   card._scenarioSteps=steps;
+  card.querySelector('.scenario-total').textContent=steps.length?`${steps.length} шагов`:'';
   pane.hidden=!steps.length;
   if(!steps.length || card._clientRun) return;
   if(card._scenarioId!==worker._j.id){
     card._scenarioId=worker._j.id;
     BrowserCore.renderTimeline(card.querySelector('.scenario-detail-list'),steps,describeStep);
-    card.querySelector('.scenario-steps').replaceChildren(...steps.map((step,index)=>{
-      const label=describeStep(step);
-      const li=document.createElement('li'); li.innerHTML='<b></b><span></span>'; li.querySelector('b').textContent=index+1; li.querySelector('span').textContent=label; li.title=`${index+1}. ${label} — нажми, чтобы повторять с этого шага`; return li;
-    }));
+    BrowserCore.renderChips(card.querySelector('.scenario-steps'),steps,describeStep);
   }
   pane.classList.toggle('error',status.phase==='error');
   card.querySelector('.scenario-track i').style.width=`${Math.max(0,Math.min(100,(status.completed||0)/steps.length*100))}%`;
@@ -654,9 +645,9 @@ function renderScenario(card,worker){
   else if(status.phase==='error'){ nowK.textContent=`Ошибка на шаге ${cur+1}`; nowT.textContent=stepLabel(cur); }
   else if(status.phase==='done'){ nowK.textContent='Сценарий выполнен'; nowT.textContent=`${steps.length} ${steps.length%10===1&&steps.length%100!==11?'шаг':steps.length%10>=2&&steps.length%10<=4&&(steps.length%100<10||steps.length%100>=20)?'шага':'шагов'}`;
     if(card._scenarioPick==null && !card._replaying){ const bar=card.querySelector('.scenario-action'); bar.dataset.mode='done'; card.querySelector('.scenario-action-t').textContent='Повторить весь сценарий в этой вкладке'; card.querySelector('.scenario-run').textContent='▶ Повторить'; bar.hidden=false; } }
-  if(status.phase!=='done' && card.querySelector('.scenario-action').dataset.mode==='done'){ const bar=card.querySelector('.scenario-action'); delete bar.dataset.mode; bar.hidden=true; card.querySelector('.scenario-run').textContent='▶ Запустить отсюда'; }
   else if(status.phase==='waiting'){ nowK.textContent='Ожидание'; nowT.textContent=`страница грузится, первый шаг: ${stepLabel(0)}`; }
   else { nowK.textContent='Открывается страница'; nowT.textContent=stepLabel(0); }
+  if(status.phase!=='done' && card.querySelector('.scenario-action').dataset.mode==='done'){ const bar=card.querySelector('.scenario-action'); delete bar.dataset.mode; bar.hidden=true; card.querySelector('.scenario-run').textContent='▶ Запустить отсюда'; }
   if(running && card._scenarioCur!==cur){ card._scenarioCur=cur; card.querySelector('.scenario-steps li.current')?.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'}); }
   const label=card.querySelector('.scenario-progress-status');
   const pauseMs=running && steps[cur]?.action==='wait' ? Math.min(60000,Math.max(0,Number(steps[cur].duration_ms)||0)) : 0;
@@ -1265,21 +1256,7 @@ function render(data){
           <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
           <div class="worker-actions"><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
           <div class="worker-url" title="Нажми, чтобы изменить адрес вкладки"></div><input class="worker-url-edit" type="url" hidden spellcheck="false" autocomplete="off" aria-label="Новый адрес вкладки" placeholder="https://">
-          <section class="scenario-panel worker-control"><div class="scenario-progress-head"><strong>Сценарий</strong><span class="scenario-progress-status"></span></div>
-            <div class="scenario-progress" hidden><div class="scenario-now"><span class="scenario-now-k"></span><span class="scenario-now-t"></span></div><div class="scenario-action" hidden><span class="scenario-action-t"></span><button type="button" class="scenario-run">▶ Запустить отсюда</button><button type="button" class="scenario-action-x" aria-label="Снять выбор" title="Снять выбор">✕</button></div><div class="scenario-track"><i></i></div><ol class="scenario-steps" aria-label="Шаги сценария"></ol><ol class="action-timeline scenario-detail-list" aria-label="Действия сценария"></ol></div>
-            <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><div class="repeat-control"><input type="number" class="repeat-count" min="1" max="100" step="1" value="1" aria-label="Сколько раз повторить"><span>раз</span><button type="button" class="record-replay">▶ Повторить</button></div><button type="button" class="record-save">💾 Сохранить</button><select class="macro-pick" aria-label="Открыть сценарий"><option value="">Открыть сценарий…</option></select><details class="recorder-more"><summary title="Ещё">⋯</summary><div class="recorder-menu"><button type="button" class="record-copy">Копировать шаги как JSON</button><button type="button" class="record-unselect">Повторять с начала</button></div></details><button type="button" class="record-clear icon" title="Очистить запись" aria-label="Очистить запись">🗑</button></div><div class="record-status" aria-live="polite"></div>
-            <ol class="recorded-steps"></ol>
-            <div class="steps-bulk" hidden><span class="steps-bulk-t"></span><button type="button" class="steps-delete">Удалить выбранные</button><button type="button" class="steps-unpick">Снять выбор</button></div>
-            <details class="manual-action"><summary>Ручное действие по селектору · для точной настройки</summary>
-            <div class="control-grid">
-              <select class="action-type" aria-label="Действие"><option value="click">Кликнуть</option><option value="wait_click">Ждать и кликнуть</option><option value="fill">Ввести текст</option><option value="hover">Навести мышь</option><option value="drag">Перетащить</option><option value="scroll">Прокрутить</option><option value="press">Нажать клавишу</option><option value="navigate">Открыть URL</option><option value="dblclick">Двойной клик</option><option value="type">Печатать по буквам</option><option value="select">Выбрать в списке</option><option value="wait_for">Ждать появления</option><option value="wait_gone">Ждать исчезновения</option><option value="wait">Пауза (мс)</option><option value="text">Прочитать текст</option><option value="screenshot">Скриншот в файлы</option><option value="reload">Перезагрузить</option></select>
-              <select class="action-kind" aria-label="Найти элемент"><option value="css">CSS selector</option><option value="text">Текст</option><option value="label">Label</option><option value="role:button">Роль: кнопка</option><option value="role:link">Роль: ссылка</option><option value="role:textbox">Роль: поле ввода</option><option value="role:checkbox">Роль: checkbox</option><option value="placeholder">Placeholder</option><option value="xpath">XPath</option></select>
-              <input class="action-query" placeholder="Элемент: CSS, текст, роль или label" aria-label="Элемент">
-              <input class="action-value" placeholder="Значение" aria-label="Значение" hidden>
-            </div>
-            <div class="control-help"></div><button type="button" class="worker-action-run">Выполнить действие</button>
-            </details>
-          </section>`;
+          ${BrowserCore.scenarioTemplate()}`;
         const img = card.querySelector('img');
         panel.append(card);
         updateActionFields(card);

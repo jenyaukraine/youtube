@@ -1,8 +1,11 @@
 (() => {
   const $ = id => document.getElementById(id);
   const STORE = 'katya_scenarios_v1';
+  $('chromeScenarioMount').innerHTML = BrowserCore.scenarioTemplate(true);
+  const panel = $('chromeScenarioMount').querySelector('.scenario-panel');
   const pending = new Map();
   let tab = null, playing = false, cancelled = false, recorded = [], recording = false;
+  let draftActive = false;
   let shotBusy = false, lastShotAt = 0, dragging = false, lastMoveAt = 0;
   let inputQueue = Promise.resolve(), lastInputError = '';
   let lastVideoTime = null, lastVideoAt = 0;
@@ -24,7 +27,7 @@
   }
   function scenarios() { try { const data = JSON.parse(localStorage.getItem(STORE) || '[]'); return Array.isArray(data) ? data : []; } catch { return []; } }
   function source() {
-    return startSource();
+    return draftActive && recorded.length ? {steps: recorded, variables: {}, startUrl: $('url').value.trim()} : startSource();
   }
   function stepLabel(step) {
     if (typeof describeStep === 'function') return step.name ? `${describeStep({...step, query: ''}).split(':')[0]}: ${step.name}` : describeStep(step);
@@ -49,9 +52,11 @@
   function selectStep(index) {
     selectedStep = selectedStep === index ? null : index;
     BrowserCore.markTimeline($('chromeStepList'), {selected: selectedStep ?? -1, failed: failedStep ?? -1});
+    $('chromeStepChips').querySelectorAll('li').forEach((li, i) => li.classList.toggle('picked', selectedStep === i));
     $('chromeStepActions').hidden = selectedStep === null;
     if (selectedStep !== null) $('chromeSelectedStep').textContent = `Шаг ${selectedStep + 1} · ${stepLabel(source()?.steps?.[selectedStep] || {})}`;
     if (selectedStep !== null) $('chromeScenarioNow').textContent = `Начать с шага ${selectedStep + 1}: ${stepLabel(source()?.steps?.[selectedStep] || {})}`;
+    $('chromeReplay').textContent = selectedStep === null ? '▶ Повторить' : `▶ С шага ${selectedStep + 1}`;
     showScenarioButton();
   }
   function showScenario() {
@@ -59,13 +64,16 @@
     selectedStep = null; failedStep = null; $('chromeStepActions').hidden = true;
     $('chromeStepCount').textContent = `${steps.length} шагов`;
     $('chromeScenarioSummary').hidden = !steps.length;
-    $('chromeScenarioStatus').textContent = steps.length ? `Готово · 0/${steps.length}` : '';
+    $('chromeScenarioStatus').textContent = steps.length ? `Готов к запуску · 0/${steps.length}` : '';
     $('chromeScenarioNow').textContent = steps.length ? 'Выбери действие или запусти с начала' : '';
     $('chromeScenarioTrack').style.width = '0%';
+    $('chromeReplay').textContent = '▶ Повторить';
+    $('chromeRecordedList').hidden = true;
+    BrowserCore.renderChips($('chromeStepChips'), steps, stepLabel);
     renderSteps(steps, $('chromeStepList'));
     showScenarioButton();
   }
-  function runState(text, status = '') { $('chromeRunState').hidden = false; $('chromeRunState').textContent = text; $('chromeRunState').className = 'chrome-run-state ' + status; }
+  function runState(text, status = '') { $('chromeRunState').textContent = text; $('chromeRunState').className = 'record-status ' + status; }
   function setMode() {
     const chromeMode = $('launchMethod').value === 'chrome';
     localStorage.setItem('katya_launch_method', $('launchMethod').value);
@@ -81,17 +89,17 @@
       button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active));
     });
     $('btnStop').disabled = chromeMode ? !playing : !curJob;
-    $('scenarioHint').textContent = chromeMode ? 'Сценарий начнётся через 10 секунд. Выбери шаг справа, чтобы продолжить с него.' : 'Вкладка откроет адрес и сразу выполнит сохранённые шаги. Повторы — в поле справа от «Повторить».';
+    $('scenarioHint').textContent = chromeMode ? 'После открытия или перезагрузки страницы сценарий подождёт до 3 секунд. В уже открытой вкладке запуск с выбранного шага — сразу.' : 'Вкладка откроет адрес и сразу выполнит сохранённые шаги. Повторы — в поле справа от «Повторить».';
     $('btnStart').textContent = chromeMode ? 'Открыть в Chrome' : 'Запустить';
     showScenario();
     if (chromeMode) refreshStatus();
   }
   async function refreshStatus() {
     const result = await bridge('status');
-    const needsUpdate = result.ok && result.version !== '0.3.0';
+    const needsUpdate = result.ok && result.version !== '0.4.0';
     const badge = $('bridgeStatus');
     badge.classList.toggle('err', !result.ok || needsUpdate);
-    badge.textContent = needsUpdate ? '● Обновите расширение до 0.3.0' : result.ok ? (result.tab ? '● Chrome подключён' : '● Расширение установлено') : '● Расширение не найдено';
+    badge.textContent = needsUpdate ? '● Обновите расширение до 0.4.0' : result.ok ? (result.tab ? '● Chrome подключён' : '● Расширение установлено') : '● Расширение не найдено';
     tab = needsUpdate ? null : result.tab || null;
     $('connectedTab').textContent = tab ? `${tab.title || 'Вкладка'} · ${tab.url}` : 'Вкладка не подключена';
     $('chromeDetach').disabled = !tab;
@@ -106,9 +114,9 @@
     if ((!result.ok || needsUpdate) && $('launchMethod').value === 'chrome') $('chromeSetup').querySelector('.chrome-install').open = true;
     if (result.ok) {
       recording = !!result.recording;
-      $('chromeEventCount').textContent = `${result.events || 0} действий`;
-      $('chromeRecord').disabled = recording;
-      $('chromeFinish').disabled = !recording;
+      $('chromeRecord').classList.toggle('recording', recording);
+      $('chromeRecord').textContent = recording ? '■ Остановить запись' : '● Записать шаги';
+      if (recording) runState(`● Запись идёт · ${result.events || 0} действий`,'running');
     }
   }
   async function loadTabs() {
@@ -199,15 +207,17 @@
     const url = $('url').value.trim();
     if (!/^https?:\/\//i.test(url)) { toast('Укажи полный адрес http(s)', 'err'); return; }
     const selected = source();
-    const repeat = Number($('chromeRepeat').value);
-    if (selected?.steps?.length && (!Number.isInteger(repeat) || repeat < 1 || repeat > 50)) { toast('Повторов должно быть от 1 до 50', 'err'); return; }
+    const repeat = Number($('chromeRepeatCount').value);
+    if (selected?.steps?.length && (!Number.isInteger(repeat) || repeat < 1 || repeat > 100)) { toast('Повторов должно быть от 1 до 100', 'err'); return; }
     const from = selectedStep || 0;
     $('btnStart').disabled = true;
     try {
+      let pageOpened = false;
       if (!tab || (from === 0 && tab.url !== url)) {
         const opened = await bridge('open', {url});
         if (!opened.ok) throw new Error(opened.error || 'Не удалось открыть вкладку');
         tab = opened.tab;
+        pageOpened = true;
       }
       await refreshStatus();
       if (!selected?.steps?.length) { runState('Вкладка открыта · можно записывать действия'); return; }
@@ -222,10 +232,11 @@
             const next = await bridge('execute', {step: {action: 'navigate', value: url}});
             if (!next.ok) throw new Error(next.error || 'Не удалось открыть страницу');
           }
-          if (pass === 0) await pause(10000);
+          if (pass > 0 || pageOpened) await pause(3000);
         },
         onStep: async (i, pass, step) => {
           BrowserCore.markTimeline($('chromeStepList'), {current:i,completed:i,selected:from});
+          $('chromeStepChips').querySelectorAll('li').forEach((li, index) => { li.classList.toggle('current', index === i); li.classList.toggle('done', index >= from && index < i); li.classList.remove('failed'); });
           $('chromeScenarioStatus').textContent = `Выполняется · ${i}/${selected.steps.length}`;
           $('chromeScenarioNow').textContent = `Шаг ${i + 1}: ${stepLabel(step)}`;
           $('chromeScenarioTrack').style.width = `${i / selected.steps.length * 100}%`;
@@ -242,6 +253,7 @@
       if (!result.ok && !result.stopped) {
         failedStep = result.index; selectedStep = result.index; items[result.index]?.classList.add('failed');
         BrowserCore.markTimeline($('chromeStepList'), {completed: result.index,failed:result.index,selected:result.index});
+        $('chromeStepChips').querySelectorAll('li').forEach((li, index) => { li.classList.toggle('failed', index === result.index); li.classList.toggle('done', index >= from && index < result.index); li.classList.remove('current'); });
         $('chromeScenarioStatus').textContent = `Ошибка · ${result.index}/${selected.steps.length}`;
         $('chromeScenarioNow').textContent = `Ошибка на шаге ${result.index + 1}: ${result.error}`;
         $('chromeStepActions').hidden = false;
@@ -252,6 +264,7 @@
       runState(cancelled ? 'Остановлено' : `Готово · ${result.completed} ${result.completed === 1 ? 'повтор' : 'повторов'}`);
       items.forEach(li => li.classList.remove('current'));
       if (!cancelled) items.forEach((li, i) => li.classList.toggle('done', i >= from));
+      $('chromeStepChips').querySelectorAll('li').forEach((li, i) => { li.classList.remove('current'); if (!cancelled) li.classList.toggle('done', i >= from); });
       $('chromeScenarioStatus').textContent = cancelled ? 'Остановлено' : from ? `Готово · с шага ${from + 1}` : `Готово · ${selected.steps.length}/${selected.steps.length}`;
       $('chromeScenarioNow').textContent = cancelled ? 'Выполнение остановлено' : 'Сценарий выполнен';
       $('chromeScenarioTrack').style.width = cancelled ? $('chromeScenarioTrack').style.width : '100%';
@@ -324,6 +337,7 @@
   $('chromeDetach').onclick = async () => { const r = await bridge('detach'); if (!r.ok) toast(r.error, 'err'); await refreshStatus(); };
   $('chromeStepList').addEventListener('click', event => { const li = event.target.closest('li[data-step-index]'); if (li && !playing) selectStep(Number(li.dataset.stepIndex)); });
   $('chromeStepList').addEventListener('keydown', event => { if (['Enter', ' '].includes(event.key)) { event.preventDefault(); event.target.click(); } });
+  $('chromeStepChips').addEventListener('click', event => { const li = event.target.closest('li[data-step-index]'); if (li && !playing) selectStep(Number(li.dataset.stepIndex)); });
   $('chromeRunFrom').onclick = start;
   $('chromeClearStep').onclick = () => selectStep(selectedStep);
   async function mediaAction(type, time) {
@@ -336,10 +350,19 @@
   $('chromeVideoBack').onclick = () => mediaAction('seek', Math.max(0, (media?.currentTime || 0) - 10));
   $('chromeVideoForward').onclick = () => mediaAction('seek', (media?.currentTime || 0) + 10);
   $('chromeVideoSeek').addEventListener('change', event => mediaAction('seek', Number(event.target.value)));
+  function updateManualFields() {
+    const action = $('chromeManualAction').value;
+    $('chromeManualValue').hidden = !['fill','type','drag','scroll','press','navigate','select','wait','screenshot'].includes(action);
+    $('chromeManualQuery').hidden = ['navigate','reload','back','wait','press','screenshot'].includes(action);
+    $('chromeManualKind').hidden = $('chromeManualQuery').hidden;
+  }
+  $('chromeManualAction').addEventListener('change', updateManualFields);
+  updateManualFields();
   $('chromeManualRun').onclick = async () => {
     const step = {action: $('chromeManualAction').value, kind: $('chromeManualKind').value, query: $('chromeManualQuery').value.trim(), value: $('chromeManualValue').value.trim()};
     if (['click', 'wait_click', 'fill', 'type', 'hover', 'dblclick', 'select', 'wait_for', 'wait_gone', 'text'].includes(step.action) && !step.query) { toast('Укажи элемент', 'err'); return; }
     if (step.action === 'screenshot') { await shot(); runState('Кадр обновлён'); return; }
+    if (step.action === 'wait') { await pause(Math.min(60000, Math.max(0, Number(step.value) || 0))); return; }
     if (!tab) { toast('Сначала подключи вкладку Chrome', 'err'); return; }
     $('chromeManualRun').disabled = true;
     try {
@@ -352,30 +375,46 @@
   };
   $('chromeTabPicker').addEventListener('toggle', () => { if ($('chromeTabPicker').open) loadTabs(); });
   $('chromeRecord').onclick = async () => {
-    const r = await bridge('record', {enabled: true});
-    if (!r.ok) { toast(r.error, 'err'); return; }
-    recorded = []; recording = true; $('chromeRecord').disabled = true; $('chromeFinish').disabled = false;
-    $('chromeRecordedList').replaceChildren(); $('chromeRecordedList').hidden = true; runState('Запись идёт · действуй в кадре справа', 'running');
-  };
-  $('chromeFinish').onclick = async () => {
-    await bridge('record', {enabled: false});
+    if (!recording) {
+      const r = await bridge('record', {enabled: true});
+      if (!r.ok) { toast(r.error, 'err'); return; }
+      recorded = []; draftActive = false; recording = true;
+      $('chromeRecord').classList.add('recording'); $('chromeRecord').textContent = '■ Остановить запись';
+      $('chromeRecordedList').replaceChildren(); runState('● Запись идёт · действия появятся после остановки', 'running');
+      return;
+    }
+    const stopped = await bridge('record', {enabled: false});
+    if (!stopped.ok) { toast(stopped.error, 'err'); return; }
     const r = await bridge('events');
     if (!r.ok) { toast(r.error, 'err'); return; }
-    recorded = eventsToSteps(r.events || []);
-    renderSteps(recorded, $('chromeRecordedList')); $('chromeRecordedList').hidden = !recorded.length; $('chromeRecordedList').closest('#chromeWorkspace').querySelector('.chrome-save').hidden = !recorded.length;
-    $('chromeEventCount').textContent = `${r.events.length} действий · ${recorded.length} шагов`;
-    recording = false; $('chromeRecord').disabled = false; $('chromeFinish').disabled = true;
-    runState('Запись готова · укажи название и сохрани');
+    recorded = eventsToSteps(r.events || []); draftActive = recorded.length > 0; recording = false;
+    $('chromeRecord').classList.remove('recording'); $('chromeRecord').textContent = '● Записать шаги';
+    showScenario();
+    runState(recorded.length ? `${recorded.length} шагов · нажми «Сохранить» или «Повторить»` : 'Запись остановлена · действий нет');
   };
   $('chromeSave').onclick = () => {
     if (!recorded.length) { toast('Сначала запиши действия', 'err'); return; }
-    const name = $('chromeRecordName').value.trim() || `Chrome запись ${new Date().toLocaleString('ru-RU')}`;
+    const host = (() => { try { return new URL($('url').value.trim()).hostname.replace(/^www\./, ''); } catch { return 'Chrome'; } })();
+    const name = `${host} · ${recorded.length} шагов · ${new Date().toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'})}`;
     const item = {id: crypto.randomUUID(), name, startUrl: $('url').value.trim(), steps: recorded, variables: {}, createdAt: new Date().toISOString()};
     localStorage.setItem(STORE, JSON.stringify([item, ...scenarios()].slice(0, 50)));
-    fillStartScenario(); $('startScenario').value = `scenario:${item.id}`; showScenario();
+    draftActive = false; recorded = []; $('chromeRecordedList').replaceChildren();
+    fillStartScenario(); fillMacroPick($('chromeMacroPick')); $('startScenario').value = `scenario:${item.id}`; applyScenarioSettings(); showScenario();
     toast('Сценарий сохранён в этом браузере');
   };
-  $('startScenario').addEventListener('change', showScenario);
+  $('chromeReplay').onclick = () => { if (playing) return stop(); start(); };
+  $('chromeCopy').onclick = async () => { try { await navigator.clipboard.writeText(JSON.stringify(source()?.steps || [], null, 2)); toast('Шаги скопированы'); } catch { toast('Не удалось скопировать', 'err'); } };
+  $('chromeClear').onclick = () => { recorded = []; draftActive = false; $('chromeRecordedList').replaceChildren(); showScenario(); runState('Запись очищена'); };
+  $('chromeUnselect').onclick = () => { if (selectedStep !== null) selectStep(selectedStep); panel.querySelector('.recorder-more').open = false; };
+  $('chromeMacroPick').addEventListener('change', event => {
+    if (!event.target.value) return;
+    draftActive = false; recorded = []; $('chromeRecordedList').replaceChildren();
+    $('startScenario').value = event.target.value;
+    event.target.value = '';
+    applyScenarioSettings();
+    showScenario();
+  });
+  $('startScenario').addEventListener('change', () => { draftActive = false; recorded = []; $('chromeRecordedList').replaceChildren(); showScenario(); });
   $('launchMethod').addEventListener('change', setMode);
   document.querySelectorAll('.method-switch button').forEach(button => button.addEventListener('click', () => {
     $('launchMethod').value = button.dataset.method;
@@ -383,8 +422,7 @@
   }));
   const requested = new URLSearchParams(location.search).get('method');
   $('launchMethod').value = requested === 'chrome' ? 'chrome' : localStorage.getItem('katya_launch_method') || 'playwright';
-  document.querySelector('#chromeWorkspace .chrome-save').hidden = true;
-  setMode(); showScenario();
+  setMode(); showScenario(); fillMacroPick($('chromeMacroPick'));
   setInterval(() => { if ($('launchMethod').value === 'chrome' && !playing) refreshStatus(); }, 3000);
   setInterval(refreshMedia, 3000);
   setInterval(() => { if ($('launchMethod').value === 'chrome' && tab && document.visibilityState === 'visible' && Date.now() - lastShotAt > 650) shot(true); }, 700);
