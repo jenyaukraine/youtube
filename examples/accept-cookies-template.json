@@ -1,0 +1,13 @@
+{
+ "name": "Принять cookies и прочитать страницу",
+ "description": "Шаблон для любого сайта: адрес передаётся через --url. До 7 секунд ждёт кнопку с текстом «Принять все» и нажимает её; оба шага optional, поэтому без баннера сценарий всё равно продолжается. Затем читает видимый текст страницы (в отчёте — первые символы, в --json — до 20000). Запуск: python -m katya.cli run examples/accept-cookies-template.json --url https://example.com --json",
+ "start_url": "",
+ "settings": {"headers": {}, "user_agent_mode": "chrome", "profile": ""},
+ "variables": {},
+ "steps": [
+  {"action": "wait_for", "kind": "text", "query": "Принять все", "timeout_ms": 7000, "optional": true, "name": "Ждать баннер cookies"},
+  {"action": "click", "kind": "text", "query": "Принять все", "nth": 1, "optional": true, "name": "Принять все"},
+  {"action": "wait", "value": "1000", "name": "Пауза 1 с"},
+  {"action": "page_text", "value": "20000", "name": "Текст страницы"}
+ ]
+}
