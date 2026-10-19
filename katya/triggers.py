@@ -60,9 +60,12 @@ def validate_trigger(trigger: Trigger) -> Optional[str]:
 
 
 class TriggerEngine:
-    def __init__(self, path: str = TRIGGERS_PATH, log=None):
+    def __init__(self, path: str = TRIGGERS_PATH, log=None, on_run=None):
         self.path = path
         self.log = log or (lambda msg: None)
+        # Called after a reaction ran: await on_run(trigger, page, worker_id, job_id, result, started, screenshot_sink).
+        # The app uses it to write the run history without this module depending on app.py.
+        self.on_run = on_run
         self.triggers: Dict[str, Trigger] = {}
         self._last_fire: Dict[tuple, float] = {}        # (trigger_id, worker_id) -> monotonic time
         self._fired_urls: Dict[tuple, str] = {}         # (trigger_id, worker_id) -> url
@@ -145,7 +148,13 @@ class TriggerEngine:
             self._last_fire[key] = now
             self._fired_urls[key] = page.url
             trigger.fired += 1
+            started = time.time()
             result = await run_steps(page, trigger.then, delay_ms=200, lock=lock, screenshot_sink=screenshot_sink)
             self.log(f"trigger '{trigger.name}' fired in {worker_id}: {'ok' if result['ok'] else result.get('error')}")
+            if self.on_run:
+                try:
+                    await self.on_run(trigger, page, worker_id, job_id, result, started, screenshot_sink)
+                except Exception as e:
+                    self.log(f"trigger run hook failed: {str(e)[:80]}")
             fired.append({"trigger": trigger.id, "name": trigger.name, **result})
         return fired

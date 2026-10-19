@@ -108,17 +108,56 @@ python3 app.py
 | `POST /api/triggers/test` `{when, then, job_id, worker_id, run}` | проверить условие на вкладке, при `run` выполнить реакцию |
 | `GET/POST /api/macros`, `DELETE /api/macros/{name}`, `POST /api/macros/{name}/run` | серверные сценарии |
 | `GET /api/files`, `GET/DELETE /api/files/{name}` | скриншоты и загрузки |
-| `WS /ws` | живое состояние каждые 2 с |
+| `GET /api/runs?limit=&source=&macro=`, `GET /api/runs/{id}` | история запусков сценариев |
+| `GET/POST /api/notify`, `POST /api/notify/test` | настройки уведомлений Telegram/Discord и пробное сообщение |
+| `WS /ws` | живое состояние каждые 2 с (включая `runs_recent` — 10 последних запусков) |
 
 Триггер: `{"name","when":{"kind","query","role"},"then":[шаги],"once_per_page","cooldown_ms","job_id"}`; `when.kind`
 может быть `url` с регулярным выражением. Проверяется в каждой вкладке раз в секунду, хранится в `data/triggers.json`.
+
+## История запусков и уведомления
+
+Каждое выполнение сценария попадает в журнал `data/runs.json` (кольцо из 500 последних записей, атомарная запись):
+стартовый сценарий вкладки (`source: startup`), `POST /api/worker/{job}/{tab}/steps` (`steps`), серверный макрос
+(`macro`) и реакция триггера (`trigger`). Запись: `{id, started, finished, source, macro_name, job_id, worker_id, url,
+total, completed, ok, error, screenshot, duration_ms, steps_summary}`. При ошибке автоматически делается JPEG-скриншот
+вкладки в `data/files`, его имя лежит в `screenshot` и доступно как `GET /api/files/{name}` (нужен API-токен).
+`steps_summary` — короткие строки «действие + цель»; значения `fill`/`type` заменены на `•••`, пароли в журнал не попадают.
+
+```bash
+curl "http://127.0.0.1:8010/api/runs?limit=20&source=macro&macro=login"
+```
+
+Уведомления о результатах настраиваются в `data/notify.json` (или через `POST /api/notify` с API-токеном):
+
+```json
+{"telegram_bot_token": "123456:ABC...", "telegram_chat_id": "-1001234567890",
+ "discord_webhook_url": "https://discord.com/api/webhooks/...", "on": ["error"],
+ "base_url": "http://my-host:8010"}
+```
+
+`on` — при каких исходах писать: `error`, `success` или оба. `base_url` нужен, чтобы ссылка на скриншот в сообщении
+была кликабельной (без него в сообщении будет путь `/api/files/{name}`). Сообщение короткое: название сценария,
+результат, «шагов N из M», URL, ошибка и ссылка на скриншот. Сетевые ошибки не мешают сценариям — только строка в логе.
+`GET /api/notify` отдаёт настройки с замаскированными секретами; если прислать замаскированное значение обратно,
+сохранённый секрет не изменится. `POST /api/notify/test` (или MCP `katya_notify_test`) отправляет пробное сообщение.
+
+**Telegram.** Создай бота у [@BotFather](https://t.me/BotFather) (`/newbot`) и скопируй токен. Напиши боту любое
+сообщение (или добавь его в группу и напиши там), затем открой
+`https://api.telegram.org/bot<ТОКЕН>/getUpdates` — в ответе `"chat":{"id":...}` и есть `telegram_chat_id`
+(у групп он отрицательный, у супергрупп начинается с `-100`). Проще: перешли сообщение боту
+[@userinfobot](https://t.me/userinfobot) — он покажет id.
+
+**Discord.** Настройки канала → Интеграции → Вебхуки → «Новый вебхук» → «Копировать URL вебхука». Вставь URL в
+`discord_webhook_url`.
 
 ## MCP для агентов (Claude Code, Codex, OpenClaw, Cursor)
 
 `python -m katya.mcp_server` (или `Katya-MCP.bat`) — stdio MCP-сервер поверх HTTP API: агенты и панель делят одни вкладки.
 Инструменты: `katya_open`, `katya_tabs`, `katya_action`, `katya_run`, `katya_text`, `katya_screenshot`, `katya_inspect`,
 `katya_close`, `katya_stop_all`, `katya_profiles`, `katya_triggers`, `katya_trigger_add`, `katya_trigger_delete`,
-`katya_macros`, `katya_macro_save`, `katya_macro_run`, `katya_files`, `katya_file`.
+`katya_macros`, `katya_macro_save`, `katya_macro_run`, `katya_files`, `katya_file`,
+`katya_runs`, `katya_run_get`, `katya_notify_test`.
 
 Claude Code на Windows:
 
@@ -140,9 +179,11 @@ claude mcp add katya -- cmd /c D:\Projects\youtube\Katya-MCP.bat
 
 | путь | что это |
 |---|---|
-| `app.py` | FastAPI: вкладки, API, триггеры, макросы, файлы, WebSocket |
+| `app.py` | FastAPI: вкладки, API, триггеры, макросы, файлы, история запусков, WebSocket |
 | `katya/actions.py` | схема шага и исполнитель — единственное место для новых действий |
 | `katya/triggers.py` | движок триггеров |
+| `katya/history.py` | история запусков сценариев (`data/runs.json`) |
+| `katya/notify.py` | уведомления в Telegram и Discord (`data/notify.json`) |
 | `katya/profiles.py` | профили браузера |
 | `katya/mcp_server.py` | MCP-мост для агентов |
 | `static/index.html` | панель (разметка и логика) |
