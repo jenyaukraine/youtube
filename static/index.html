@@ -217,6 +217,7 @@ input::placeholder{color:#738198}.hint{font-size:11.5px;color:var(--txt3);line-h
 .worker-preview img{width:100%;height:100%;object-fit:contain;display:block}
 .worker-preview img{cursor:pointer;user-select:none;-webkit-user-drag:none;touch-action:none}
 .worker-preview.expanded{position:fixed;inset:12px;width:auto;height:auto;aspect-ratio:auto;z-index:100;border:2px solid var(--green);box-shadow:0 0 0 100vmax rgba(0,0,0,.8),0 24px 80px #000}
+.worker-preview:focus{outline:2px solid var(--green)}
 body.preview-expanded{overflow:hidden}
 .worker-preview .preview-note{position:absolute;inset:0;display:grid;place-items:center;background:#090d14;color:var(--txt3)}
 .worker-preview [hidden]{display:none}
@@ -229,6 +230,7 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
 .favorite-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.favorite-list button{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid #506054;border-radius:8px;background:#17241c;color:#c9eaba;padding:8px 10px;cursor:pointer;font:11px 'Manrope',sans-serif}
 @media(max-width:600px){.control-grid{grid-template-columns:1fr}.worker-actions{grid-column:1/-1;justify-content:flex-start}.worker-meta{grid-column:1/-1;flex-wrap:wrap}}
 .preview-tools{position:absolute;left:10px;bottom:10px;display:flex;gap:6px;z-index:2}.preview-tools button{border:1px solid #61758b;border-radius:8px;background:rgba(8,16,25,.91);color:#e8f6ff;padding:9px 11px;font:800 12px 'Manrope',sans-serif;cursor:pointer}.preview-tools button.on{border-color:#a8f278;background:#23442a;color:#e6ffd8}.worker-preview.pick img{cursor:crosshair}.preview-hint{position:absolute;left:10px;top:10px;z-index:2;background:rgba(8,16,25,.88);border:1px solid #61758b;border-radius:8px;padding:7px 10px;color:#e8f6ff;font:700 11px 'Manrope',sans-serif;pointer-events:none}.worker-control .recorder{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}.worker-control .recorder button{padding:8px 10px;border:1px solid #465568;border-radius:8px;background:#182230;color:#d7e5f4;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-control .recorder .recording{border-color:#ff8d93;color:#ffb8bc;background:#39222a}.recorded-steps{margin:10px 0 0;padding-left:22px;color:#b9c8d9;font:11px 'Manrope',sans-serif}.recorded-steps li{padding:4px 0}.recorded-steps:empty::before{content:'Пока нет записанных действий';color:#73849a}
+.preview-typebar{position:absolute;left:10px;bottom:52px;z-index:3;display:flex;gap:6px;max-width:calc(100% - 20px);padding:8px;border:1px solid #61758b;border-radius:9px;background:rgba(8,16,25,.96)}.preview-typebar[hidden]{display:none}.preview-typebar input{width:min(300px,42vw);min-width:90px;padding:8px 10px;border:1px solid #61758b;border-radius:7px;background:#101722;color:#fff;font:13px 'Manrope',sans-serif}.preview-typebar button{border:1px solid #61758b;border-radius:7px;background:#263b29;color:#e6ffd8;padding:8px 10px;font:800 11px 'Manrope',sans-serif;cursor:pointer}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.goal{align-items:stretch}.goal .pct{margin-left:0}.wrap{padding:22px 18px 45px}}
 @media(max-width:600px){header{align-items:flex-start}.brand h1{font-size:20px}.brand p{font-size:11px}.logo{width:48px;height:48px}.badge{font-size:10px;padding:9px 10px}.badge .dot{width:8px;height:8px}.goal{padding:24px}.goal .big{font-size:43px}.goal .pct{width:100%}.card{padding:20px}.totals{grid-template-columns:1fr 1fr}.tile:last-child{grid-column:span 2}.worker{flex-wrap:wrap}.worker .act{order:3;text-align:left;flex-basis:100%}}
 </style>
@@ -435,13 +437,34 @@ async function runAction(card, payload, options={}){
     });
     const data = await r.json();
     if(!options.quiet) toast(data.ok ? (payload.action==='inspect' ? 'Элемент выбран' : 'Действие выполнено') : (data.error || 'Действие не выполнено'),data.ok ? 'ok' : 'err');
-    if(data.ok && card.dataset.recording==='1' && options.record!==false && payload.action!=='inspect'){
+    if(data.ok && card.dataset.recording==='1' && options.record!==false && !['inspect','type'].includes(payload.action)){
       card._steps.push(payload); renderSteps(card);
     }
     if(data.ok && payload.action!=='inspect' && options.refresh!==false) setTimeout(() => { if(card.isConnected) loadShot(card,true); }, payload.action === 'navigate' ? 2500 : 800);
     return data;
   }catch(e){ if(!options.quiet) toast('Ошибка управления: ' + e.message,'err'); return null; }
   finally{ run.disabled = false; }
+}
+
+function sendPreviewInput(card,payload){
+  card._inputChain=(card._inputChain || Promise.resolve()).then(() => runAction(card,payload,{quiet:true,record:false}));
+  return card._inputChain;
+}
+function flushPreviewText(card){
+  clearTimeout(card._textTimer);
+  card._textTimer=null;
+  const value=card._pendingText || '';
+  card._pendingText='';
+  return value ? sendPreviewInput(card,{action:'type',value}) : (card._inputChain || Promise.resolve());
+}
+function queuePreviewText(card,text){
+  card._pendingText=(card._pendingText || '')+text;
+  clearTimeout(card._textTimer);
+  card._textTimer=setTimeout(() => flushPreviewText(card),120);
+}
+async function pressPreviewKey(card,key){
+  await flushPreviewText(card);
+  return sendPreviewInput(card,{action:'press',value:key});
 }
 
 function previewPoint(img, clientX, clientY){
@@ -512,7 +535,7 @@ $('workersPanel').addEventListener('click', async e => {
     card.dataset.previewMode = card.dataset.previewMode==='pick' ? '' : 'pick';
     card.querySelector('.worker-preview').classList.toggle('pick',card.dataset.previewMode==='pick');
     e.target.classList.toggle('on',card.dataset.previewMode==='pick');
-    card.querySelector('.preview-hint').textContent=card.dataset.previewMode==='pick' ? 'Нажми на элемент, чтобы выбрать его' : 'Клик · колесо или перетаскивание для прокрутки';
+    card.querySelector('.preview-hint').textContent=card.dataset.previewMode==='pick' ? 'Нажми на элемент, чтобы выбрать его' : 'Кликни в поле и печатай · колесо для прокрутки';
     return;
   }
   if(e.target.matches('.worker-preview img')){
@@ -523,8 +546,28 @@ $('workersPanel').addEventListener('click', async e => {
       if(card.dataset.previewMode==='pick'){
         const data=await runAction(card,{action:'inspect',...point},{record:false,refresh:false});
         if(data?.ok){ card.querySelector('.worker-control').open=true; card.querySelector('.action-type').value='click'; card.querySelector('.action-kind').value='css'; card.querySelector('.action-query').value=data.selector; updateActionFields(card); }
-      }else runAction(card,{action:'point',...point});
+      }else {
+        card.querySelector('.worker-preview').focus();
+        sendPreviewInput(card,{action:'point',...point});
+      }
     }
+    return;
+  }
+  if(e.target.matches('.preview-keyboard')){
+    const bar=e.target.closest('.worker-preview').querySelector('.preview-typebar');
+    bar.hidden=!bar.hidden;
+    if(!bar.hidden) bar.querySelector('input').focus();
+    return;
+  }
+  if(e.target.matches('.preview-type-send')){
+    const card=e.target.closest('.worker'), field=card.querySelector('.preview-typebar input');
+    if(field.value){ sendPreviewInput(card,{action:'type',value:field.value}); field.value=''; }
+    field.focus();
+    return;
+  }
+  if(e.target.matches('.preview-enter,.preview-tab,.preview-backspace')){
+    const card=e.target.closest('.worker');
+    pressPreviewKey(card,e.target.matches('.preview-enter') ? 'Enter' : e.target.matches('.preview-tab') ? 'Tab' : 'Backspace');
     return;
   }
   if(e.target.matches('.record-toggle,.record-replay,.record-copy,.record-clear')){
@@ -580,6 +623,31 @@ document.addEventListener('keydown', e => {
   preview.classList.remove('expanded');
   document.body.classList.remove('preview-expanded');
   preview.querySelector('.preview-expand').textContent='⛶ Развернуть';
+});
+$('workersPanel').addEventListener('keydown', e => {
+  const preview=e.target.closest('.worker-preview');
+  if(!preview) return;
+  if(e.target.matches('.preview-typebar input')){
+    if(e.key==='Enter'){ e.preventDefault(); preview.querySelector('.preview-type-send').click(); }
+    return;
+  }
+  if(e.target!==preview) return;
+  const card=preview.closest('.worker');
+  if(e.key.length===1 && !e.ctrlKey && !e.metaKey && !e.altKey){
+    e.preventDefault(); queuePreviewText(card,e.key); return;
+  }
+  const keys=new Set(['Backspace','Delete','Enter','Tab','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','PageUp','PageDown']);
+  if(keys.has(e.key)){
+    e.preventDefault(); pressPreviewKey(card,e.key); return;
+  }
+  if((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='a'){
+    e.preventDefault(); pressPreviewKey(card,'ControlOrMeta+A');
+  }
+});
+$('workersPanel').addEventListener('paste', e => {
+  if(!e.target.matches('.worker-preview')) return;
+  const text=e.clipboardData?.getData('text/plain');
+  if(text){ e.preventDefault(); sendPreviewInput(e.target.closest('.worker'),{action:'type',value:text.slice(0,2048)}); }
 });
 
 function loadShot(card, force=false){
@@ -668,7 +736,7 @@ function render(data){
       if(!card){
         card = document.createElement('div');
         card.className = 'worker'; card.dataset.id = w.id;
-        card.innerHTML = `<div class="worker-preview"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми или прокрути" draggable="false" hidden><span class="preview-hint">Клик · колесо или перетаскивание для прокрутки</span><div class="preview-tools"><button type="button" class="preview-up" title="Прокрутить вверх">↑ Вверх</button><button type="button" class="preview-down" title="Прокрутить вниз">↓ Вниз</button><button type="button" class="preview-pick">⌕ Выбрать элемент</button><button type="button" class="preview-expand">⛶ Развернуть</button></div><span class="shot-time">Ожидаю кадр…</span></div>
+        card.innerHTML = `<div class="worker-preview" tabindex="0"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми или прокрути" draggable="false" hidden><span class="preview-hint">Кликни в поле и печатай · колесо для прокрутки</span><div class="preview-typebar" hidden><input type="text" placeholder="Текст в выбранное поле" aria-label="Текст в выбранное поле" autocomplete="off"><button type="button" class="preview-type-send">Написать</button><button type="button" class="preview-enter">Enter</button><button type="button" class="preview-tab">Tab</button><button type="button" class="preview-backspace">⌫</button></div><div class="preview-tools"><button type="button" class="preview-up" title="Прокрутить вверх">↑ Вверх</button><button type="button" class="preview-down" title="Прокрутить вниз">↓ Вниз</button><button type="button" class="preview-keyboard">⌨ Ввод</button><button type="button" class="preview-pick">⌕ Выбрать элемент</button><button type="button" class="preview-expand">⛶ Развернуть</button></div><span class="shot-time">Ожидаю кадр…</span></div>
           <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
           <div class="worker-actions"><button type="button" class="worker-shot">Обновить кадр</button><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
           <div class="worker-url"></div>

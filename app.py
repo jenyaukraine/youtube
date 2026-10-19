@@ -443,7 +443,7 @@ async def reload_worker(job_id: str, worker_id: str):
         return JSONResponse({"ok": False, "error": "Не удалось перезагрузить вкладку"}, status_code=503)
 
 class BrowserAction(BaseModel):
-    action: Literal["click", "wait_click", "point", "inspect", "fill", "hover", "drag", "scroll", "press", "navigate"]
+    action: Literal["click", "wait_click", "point", "inspect", "fill", "hover", "drag", "scroll", "press", "type", "navigate"]
     kind: Literal["css", "text", "role", "label"] = "css"
     query: str = ""
     role: str = "button"
@@ -468,7 +468,7 @@ async def browser_action(job_id: str, worker_id: str, req: BrowserAction):
         return JSONResponse({"ok": False, "error": "Неподдерживаемая роль"}, status_code=400)
     if req.action in {"click", "wait_click", "fill", "hover", "drag"} and not query:
         return JSONResponse({"ok": False, "error": "Укажи элемент"}, status_code=400)
-    if req.action in {"drag", "press", "navigate"} and not req.value.strip():
+    if (req.action in {"drag", "press", "navigate"} and not req.value.strip()) or (req.action == "type" and not req.value):
         return JSONResponse({"ok": False, "error": "Укажи значение действия"}, status_code=400)
     if req.action == "navigate" and not normalize_browser_url(req.value):
         return JSONResponse({"ok": False, "error": "Неверный URL"}, status_code=400)
@@ -531,6 +531,8 @@ async def browser_action(job_id: str, worker_id: str, req: BrowserAction):
             await page.mouse.wheel(0, max(-3000, min(3000, int(req.value or "500"))))
         elif req.action == "press":
             await page.keyboard.press(req.value, timeout=7000)
+        elif req.action == "type":
+            await page.keyboard.type(req.value, delay=0)
         else:
             locator = element(query)
             if req.action == "wait_click":
