@@ -18,7 +18,8 @@ from playwright.async_api import async_playwright, Browser, Page, Playwright
 
 from katya.actions import Macro, Step, normalize_url, run_step, run_steps, validate_step
 from katya.profiles import PROFILES, context_options, find_profile
-from katya.triggers import Trigger, TriggerEngine, validate_trigger
+from katya.actions import locate
+from katya.triggers import Condition, Trigger, TriggerEngine, validate_trigger
 
 app = FastAPI(title="Katya Browser Lab")
 
@@ -806,6 +807,59 @@ async def add_trigger(trigger: Trigger, x_katya_token: Optional[str] = Header(de
     saved = TRIGGERS.add(trigger)
     log(f"trigger '{saved.name}' saved ({saved.id})")
     return {"ok": True, "trigger": saved.model_dump()}
+
+
+class TriggerTestReq(BaseModel):
+    when: Condition
+    then: List[Step] = []
+    job_id: str
+    worker_id: str
+    run: bool = False
+    control_token: str = ""
+
+
+@app.post("/api/triggers/test")
+async def test_trigger(req: TriggerTestReq, x_katya_token: Optional[str] = Header(default=None)):
+    """Check a trigger condition against an open tab right now; optionally run its steps."""
+    job = JOBS.get(req.job_id)
+    if not job or not authorized(job, req.control_token, x_katya_token):
+        return forbidden()
+    job, page = find_page(req.job_id, req.worker_id)
+    if not page:
+        return JSONResponse({"ok": False, "error": "Вкладка не найдена"}, status_code=404)
+    probe = Trigger(name="test", when=req.when, then=req.then or [Step(action="wait", value="1")])
+    error = validate_trigger(probe)
+    if error:
+        return JSONResponse({"ok": False, "error": error}, status_code=400)
+    result: Dict = {"ok": True, "url": page.url, "matches": False, "count": 0, "box": None}
+    try:
+        if req.when.kind == "url":
+            result["matches"] = re.search(req.when.query, page.url) is not None
+        else:
+            loc = locate(page, req.when.kind, req.when.query, req.when.role)
+            count = await loc.count()
+            result["count"] = count
+            visible = None
+            for i in range(min(count, 20)):
+                if await loc.nth(i).is_visible():
+                    visible = loc.nth(i)
+                    break
+            result["matches"] = visible is not None
+            if visible is not None:
+                box = await visible.bounding_box()
+                viewport = page.viewport_size
+                if box and viewport:
+                    result["box"] = {"x": box["x"] / viewport["width"], "y": box["y"] / viewport["height"],
+                                     "w": box["width"] / viewport["width"], "h": box["height"] / viewport["height"]}
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"Проверка не удалась: {str(e).splitlines()[0][:120]}"}, status_code=400)
+    if req.run and req.then:
+        run = await run_steps(page, req.then, delay_ms=200, lock=job.page_lock(req.worker_id),
+                              screenshot_sink=make_screenshot_sink(req.worker_id))
+        result["run"] = run
+        job.screenshots.pop(req.worker_id, None)
+        log(f"trigger test run in {req.worker_id}: {'ok' if run['ok'] else run.get('error')}")
+    return result
 
 
 @app.delete("/api/triggers/{trigger_id}")

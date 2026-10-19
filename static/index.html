@@ -330,7 +330,9 @@ input[type=url]::placeholder{color:#8290a3}
 select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:10px;color:var(--txt);padding:11px 13px;font:600 13px 'Manrope',sans-serif}
 </style>
 <link rel="stylesheet" href="/katya.css">
+<link rel="stylesheet" href="/chrome-panel.css">
 <script src="/katya-fx.js" defer></script>
+<script src="/chrome-panel.js" defer></script>
 </head>
 <body>
 <div class="bg-fx"></div>
@@ -349,7 +351,7 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
         <p>Вкладки, снимки и действия в одном месте</p>
       </div>
     </div>
-    <div class="header-actions"><a href="/extension.html">Мой Chrome ↗</a><a href="/scenarios.html">Сценарии ↗</a><div class="badge"><span class="dot" id="connDot"></span><span id="connTxt">подключение…</span></div></div>
+    <div class="header-actions"><a href="/scenarios.html">Сценарии ↗</a><div class="badge"><span class="dot" id="connDot"></span><span id="connTxt">подключение…</span></div></div>
   </header>
 
   <div class="goal">
@@ -373,6 +375,14 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
       <input type="url" id="url" name="katya_target_url" autocomplete="url" inputmode="url" autocapitalize="off" placeholder="https://example.com" value="https://www.youtube.com/watch?v=i6XB07FpBG0" spellcheck="false">
       <div class="hint">Любой полный http:// или https:// URL. Для YouTube можно вставить и короткую ссылку.</div>
 
+      <label for="launchMethod">Способ запуска</label>
+      <select id="launchMethod" aria-label="Способ запуска"><option value="playwright">Playwright · серверный браузер</option><option value="chrome">Мой Chrome · расширение</option></select>
+      <div id="chromeSetup" hidden>
+        <div class="chrome-connection"><span id="bridgeStatus">Проверяю расширение…</span><span id="connectedTab">Вкладка не подключена</span></div>
+        <details class="chrome-install"><summary>Установка расширения</summary><ol><li><a href="/Katya-Browser-Bridge.zip" download>Скачать ZIP расширения ↗</a> и распаковать.</li><li>Открыть <code>chrome://extensions</code>, включить режим разработчика и загрузить распакованную папку.</li><li>Войти в аккаунт вручную, открыть вкладку и нажать значок расширения → «Подключить эту вкладку».</li></ol></details>
+        <div class="chrome-repeat"><label for="chromeRepeat">Повторов сценария</label><input type="number" id="chromeRepeat" min="1" max="50" value="1"></div>
+      </div>
+      <div class="server-only">
       <label>Потоков (параллельных окон)</label>
       <div class="slider-row">
         <input type="range" id="workers" min="1" max="8" value="1">
@@ -385,15 +395,18 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
         <button data-d="1800">30 мин</button>
         <button data-d="3600">1 час</button>
       </div>
+      </div>
 
+      <div class="server-only">
       <label for="uaMode">User-Agent новой вкладки</label>
       <select id="uaMode" aria-label="User-Agent новой вкладки"><option value="chrome">Без подмены User-Agent</option><option value="random">Подменить на Chrome или Edge</option><option value="browser">Без подмены</option></select>
       <div class="hint">Сайт запускает отдельный управляемый браузер на сервере. Подмена User-Agent не превращает его в Chrome на твоём ПК и не переносит вход в Google.</div>
+      </div>
 
       <label for="startScenario">Сценарий при открытии</label>
       <select id="startScenario" aria-label="Сценарий при открытии"><option value="">Нет, просто открыть страницу</option></select>
       <div class="hint">Вкладка откроет адрес и сразу выполнит сохранённые шаги. Повторы — в поле справа от «Повторить».</div>
-      <details class="advanced"><summary>HTTP-заголовки для новых вкладок</summary>
+      <details class="advanced server-only"><summary>HTTP-заголовки для новых вкладок</summary>
         <textarea id="customHeaders" spellcheck="false" placeholder='{"Accept-Language":"ru-RU,ru;q=0.9"}'></textarea>
         <div class="hint">Формат JSON. Применяются ко всем запросам новой вкладки. Токены, Cookie и Authorization сюда не вводи.</div>
       </details>
@@ -407,6 +420,15 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
     <!-- WORKERS CARD -->
     <div class="card">
       <h2>Вкладки ♡</h2>
+      <div id="chromeWorkspace" hidden>
+        <div class="chrome-toolbar"><span class="chrome-mode-label">ВАШ CHROME <span class="chrome-heart">♡</span></span><div><button type="button" id="chromeShot">Снимок</button><button type="button" id="chromeDetach">Отключить</button></div></div>
+        <div class="chrome-shot"><img id="chromeShotImage" alt="Снимок вкладки Chrome" hidden><div id="chromeShotEmpty">Подключите вкладку через значок расширения или нажмите «Запустить».</div></div>
+        <div class="chrome-run-state" id="chromeRunState" aria-live="polite">Готово к работе</div>
+        <div class="chrome-steps-head"><strong>Шаги сценария</strong><span id="chromeStepCount">0 шагов</span></div><ol class="chrome-steps" id="chromeStepList"></ol>
+        <div class="chrome-recorder"><button type="button" id="chromeRecord">● Записать шаги</button><button type="button" id="chromeFinish" disabled>■ Закончить</button><span id="chromeEventCount">0 действий</span></div>
+        <div class="chrome-save"><input id="chromeRecordName" type="text" placeholder="Название сценария"><button type="button" id="chromeSave">Сохранить запись</button></div><ol class="chrome-steps" id="chromeRecordedList"></ol>
+      </div>
+      <div id="serverWorkspace">
       <div class="workers" id="workersPanel">
         <div class="empty">Нет активных вкладок.<br><b>После запуска состояние появится здесь.</b></div>
       </div>
@@ -433,6 +455,7 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
         </svg>
         <div class="system-foot"><span>RAM <b id="ramValue">0%</b></span><span>Всего процессов Chrome на устройстве <b id="browserValue">0</b></span><span>Обновление каждые 2 с</span></div>
       </div>
+      </div>
     </div>
   </div>
 
@@ -453,6 +476,8 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
         <input type="text" id="trQuery" placeholder="Что искать" required maxlength="300">
         <select id="trThen" class="wide"><option value="click">Кликнуть по найденному элементу</option><option value="press:Escape">Нажать Escape</option><option value="reload">Перезагрузить страницу</option><option value="screenshot">Сделать скриншот в файлы</option><option value="steps">Свои шаги (JSON ниже)</option></select>
         <textarea id="trSteps" placeholder='[{"action":"click","kind":"text","query":"Принять все"}]' hidden></textarea>
+        <div class="wide trigger-test-row"><button type="button" id="trTest" class="secondary">Проверить на вкладке</button><button type="button" id="trRun" class="secondary">Выполнить сейчас</button></div>
+        <div class="wide trigger-test-result" id="trResult" hidden></div>
         <button type="submit">Добавить триггер</button>
       </form>
     </div>
@@ -499,6 +524,7 @@ function toast(msg, type='ok'){
 }
 
 async function start(){
+  if($('launchMethod').value==='chrome') return window.chromePanel?.start();
   const url = $('url').value.trim();
   if(!url){ toast('Вставь адрес страницы','err'); return; }
   let headers = {};
@@ -519,6 +545,7 @@ async function start(){
 }
 
 async function stopAll(){
+  if($('launchMethod').value==='chrome') return window.chromePanel?.stop();
   if(!curJob){ toast('Нет своей активной сессии','err'); return; }
   await fetch(`/api/job/${encodeURIComponent(curJob)}/stop`,{method:'POST'});
   toast('Останавливаю…');
@@ -1181,7 +1208,7 @@ function render(data){
   $('connDot').className = 'dot' + (anyRunning ? ' busy':'');
   $('connTxt').textContent = anyRunning ? 'работает' : (wsAlive ? 'онлайн' : 'оффлайн');
   if(!active.some(j => j.id === curJob)) curJob = active.find(j => sessionStorage.getItem('katya_control_' + j.id))?.id || null;
-  $('btnStop').disabled = !curJob;
+  $('btnStop').disabled = $('launchMethod').value === 'chrome' ? !window.chromePanel?.playing : !curJob;
 
   // goal
   $('goalHours').textContent = fmtH(total);
@@ -1254,6 +1281,11 @@ const tokenInput=$('apiToken');
 try{ tokenInput.value=localStorage.getItem('katya_token')||''; }catch{}
 tokenInput.addEventListener('change',()=>{ try{ localStorage.setItem('katya_token',tokenInput.value.trim()); }catch{}; loadMacros(); loadFiles(); });
 function apiToken(){ return tokenInput.value.trim(); }
+function activeCard(){
+  const cards=[...document.querySelectorAll('#workersPanel .worker')];
+  const owned=c=>!!sessionStorage.getItem('katya_control_'+(c.querySelector('.worker-stop')?.dataset.job||''));
+  return cards.sort((a,b)=>(owned(b)-owned(a))||((b._lastTouch||0)-(a._lastTouch||0)))[0]||null;
+}
 function tabAuthHeaders(){
   const open=[...document.querySelectorAll('.worker-stop')].map(b=>b.dataset.job);
   const job=(curJob && open.includes(curJob))?curJob:open.find(id=>sessionStorage.getItem('katya_control_'+id));
@@ -1324,8 +1356,10 @@ let lastTriggersJson='';
 function renderTriggers(triggers){
   const json=JSON.stringify(triggers||[]); if(json===lastTriggersJson) return; lastTriggersJson=json;
   $('triggerList').replaceChildren(...(triggers||[]).map(t=>{ const item=document.createElement('div'); item.className='auto-item';
-    item.innerHTML=`<b></b><span class="meta"></span><span class="ops"><button type="button" class="toggle"></button><button type="button" class="danger">✕</button></span>`;
+    item.innerHTML=`<b></b><span class="meta"></span><span class="ops"><button type="button" class="test" title="Проверить условие на активной вкладке">Тест</button><button type="button" class="run" title="Выполнить реакцию на активной вкладке">▶</button><button type="button" class="toggle"></button><button type="button" class="danger">✕</button></span>`;
     item.querySelector('b').textContent=`${t.name} · сработал ${t.fired}×`;
+    item.querySelector('.test').onclick=()=>testTrigger(t.when,t.then,false,item);
+    item.querySelector('.run').onclick=()=>testTrigger(t.when,t.then,true,item);
     item.querySelector('.meta').textContent=`${t.when.kind}: ${t.when.query} → ${t.then.map(describeStep).join(', ')}`;
     const toggle=item.querySelector('.toggle'); toggle.textContent=t.enabled?'Вкл':'Выкл'; toggle.classList.toggle('off',!t.enabled);
     toggle.onclick=async()=>{ const d=await apiFetch(`/api/triggers/${t.id}/enabled?enabled=${!t.enabled}`,{method:'POST'}); if(!d.ok) toast(d.error||'Ошибка','err'); };
@@ -1333,16 +1367,50 @@ function renderTriggers(triggers){
     return item; }));
 }
 $('trThen').addEventListener('change',()=>{ $('trSteps').hidden=$('trThen').value!=='steps'; });
-$('triggerForm').addEventListener('submit', async e => {
-  e.preventDefault();
+function triggerFromForm(){
   const kindValue=$('trKind').value, kind=kindValue.startsWith('role:')?'role':kindValue, role=kindValue.startsWith('role:')?kindValue.slice(5):'button';
   const when={kind,query:$('trQuery').value.trim(),role}; const mode=$('trThen').value; let then;
-  if(mode==='click'){ if(kind==='url'){ toast('Для условия URL выбери другое действие','err'); return; } then=[{action:'click',kind,role,query:when.query,optional:true}]; }
+  if(!when.query){ toast('Укажи, что искать на странице','err'); $('trQuery').focus(); return null; }
+  if(mode==='click'){ if(kind==='url'){ toast('Для условия URL выбери другое действие','err'); return null; } then=[{action:'click',kind,role,query:when.query,optional:true}]; }
   else if(mode.startsWith('press:')) then=[{action:'press',value:mode.slice(6)}];
   else if(mode==='reload') then=[{action:'reload'}];
   else if(mode==='screenshot') then=[{action:'screenshot',name:$('trName').value.trim()}];
-  else { try{ then=JSON.parse($('trSteps').value); if(!Array.isArray(then)||!then.length) throw Error(); }catch{ toast('Шаги должны быть JSON-массивом','err'); return; } }
-  const r=await apiFetch('/api/triggers',{method:'POST',body:JSON.stringify({name:$('trName').value.trim(),when,then,cooldown_ms:5000})});
+  else { try{ then=JSON.parse($('trSteps').value); if(!Array.isArray(then)||!then.length) throw Error(); }catch{ toast('Шаги должны быть JSON-массивом','err'); return null; } }
+  return {name:$('trName').value.trim(),when,then};
+}
+function showHit(card,box){
+  const preview=card.querySelector('.worker-preview'), img=preview.querySelector('img'); if(!img || img.hidden || !box) return;
+  const cw=preview.clientWidth, ch=preview.clientHeight, scale=Math.min(cw/img.naturalWidth, ch/img.naturalHeight);
+  const w=img.naturalWidth*scale, h=img.naturalHeight*scale, ox=(cw-w)/2, oy=(ch-h)/2;
+  preview.querySelectorAll('.preview-hit').forEach(el=>el.remove());
+  const hit=document.createElement('div'); hit.className='preview-hit';
+  Object.assign(hit.style,{left:(ox+box.x*w)+'px',top:(oy+box.y*h)+'px',width:Math.max(6,box.w*w)+'px',height:Math.max(6,box.h*h)+'px'});
+  preview.append(hit); setTimeout(()=>hit.remove(),4000);
+}
+async function testTrigger(when,then,run,item){
+  const card=activeCard(); const out=$('trResult');
+  const show=(text,ok)=>{ out.hidden=false; out.textContent=text; out.classList.toggle('ok',!!ok); out.classList.toggle('err',!ok); if(item){ item.querySelector('.meta').textContent=text; item.classList.toggle('hit',!!ok); } };
+  if(!card){ show('Нет открытой вкладки: сначала открой страницу, на которой хочешь проверить триггер',false); return; }
+  if(!sessionStorage.getItem('katya_control_'+card.querySelector('.worker-stop').dataset.job) && !apiToken()){ show('Эта вкладка открыта не из этой панели. Открой свою вкладку или введи ключ API',false); return; }
+  const button=card.querySelector('.worker-stop'), job=button.dataset.job, worker=button.dataset.worker;
+  const control_token=sessionStorage.getItem('katya_control_'+job)||'';
+  const name=card.querySelector('.name').textContent;
+  show(`Проверяю на вкладке ${name}…`,true); card._lastTouch=Date.now();
+  const r=await apiFetch('/api/triggers/test',{method:'POST',body:JSON.stringify({when,then:run?then:[],job_id:job,worker_id:worker,run,control_token})});
+  if(!r.ok){ show(r.error||'Проверка не удалась',false); return; }
+  let host=''; try{ host=new URL(r.url).hostname.replace(/^www\./,''); }catch{}
+  if(!r.matches){ show(`✗ На ${host||'странице'} (${name}) сейчас не найдено: ${when.kind==='url'?'URL не совпадает':'элемент не виден'}${r.count?` · совпадений в DOM: ${r.count}, но ни одно не видно`:''}`,false); return; }
+  let text=`✓ Найдено на ${host||'странице'} (${name})${r.count>1?` · элементов: ${r.count}, сработает первый видимый`:''}`;
+  if(r.run){ text+=r.run.ok?` · реакция выполнена: ${r.run.completed} шагов`:` · реакция остановилась: ${r.run.error||'ошибка'}`; setTimeout(()=>loadShot(card,true),600); }
+  show(text,true); showHit(card,r.box);
+  card.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+$('trTest').onclick=()=>{ const t=triggerFromForm(); if(t) testTrigger(t.when,t.then,false); };
+$('trRun').onclick=()=>{ const t=triggerFromForm(); if(t) testTrigger(t.when,t.then,true); };
+$('triggerForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const t=triggerFromForm(); if(!t) return; const {when,then}=t;
+  const r=await apiFetch('/api/triggers',{method:'POST',body:JSON.stringify({name:$('trName').value.trim()||`${when.query.slice(0,30)}`,when,then,cooldown_ms:5000})});
   toast(r.ok?'Триггер добавлен':(r.error||'Не удалось добавить'),r.ok?'ok':'err');
   if(r.ok){ $('trName').value=''; $('trQuery').value=''; }
 });
