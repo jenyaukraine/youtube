@@ -213,9 +213,9 @@ input::placeholder{color:#738198}.hint{font-size:11.5px;color:var(--txt3);line-h
 .system-foot{display:flex;gap:15px;flex-wrap:wrap;font-size:11px;color:var(--txt3)}.system-foot b{color:var(--txt2);font-weight:800}
 .worker-stop{border:1px solid #5c4b54;border-radius:8px;background:#261c25;color:#ff9ba3;padding:7px 9px;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-stop:hover{background:#38242b;border-color:var(--red)}
 .worker{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:12px}
-.worker-preview{position:relative;grid-column:1/-1;aspect-ratio:16/9;max-height:270px;overflow:hidden;border:1px solid #354153;border-radius:10px;background:#090d14;display:grid;place-items:center;color:var(--txt3);font-size:12px}
+.worker-preview{position:relative;grid-column:1/-1;aspect-ratio:1365/768;overflow:hidden;border:1px solid #354153;border-radius:10px;background:#090d14;display:grid;place-items:center;color:var(--txt3);font-size:12px}
 .worker-preview img{width:100%;height:100%;object-fit:contain;display:block}
-.worker-preview img{cursor:crosshair}
+.worker-preview img{cursor:pointer;user-select:none;-webkit-user-drag:none;touch-action:none}
 .worker-preview .preview-note{position:absolute;inset:0;display:grid;place-items:center;background:#090d14;color:var(--txt3)}
 .worker-preview [hidden]{display:none}
 .worker-meta{display:flex;align-items:center;gap:12px;min-width:0}.worker-meta .act{min-width:0}.worker .secs{white-space:nowrap}
@@ -226,7 +226,7 @@ input::placeholder{color:#738198}.hint{font-size:11.5px;color:var(--txt3);line-h
 footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:#475567}
 .favorite-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.favorite-list button{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid #506054;border-radius:8px;background:#17241c;color:#c9eaba;padding:8px 10px;cursor:pointer;font:11px 'Manrope',sans-serif}
 @media(max-width:600px){.control-grid{grid-template-columns:1fr}.worker-actions{grid-column:1/-1;justify-content:flex-start}.worker-meta{grid-column:1/-1;flex-wrap:wrap}}
-.preview-tools{position:absolute;left:8px;bottom:8px;display:flex;gap:6px;z-index:2}.preview-tools button{border:1px solid #61758b;border-radius:7px;background:rgba(8,16,25,.88);color:#e8f6ff;padding:7px 9px;font:800 11px 'Manrope',sans-serif;cursor:pointer}.preview-tools button.on{border-color:#a8f278;background:#23442a;color:#e6ffd8}.worker-preview.pick img{cursor:crosshair}.worker-preview:not(.pick) img{cursor:default}.worker-control .recorder{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}.worker-control .recorder button{padding:8px 10px;border:1px solid #465568;border-radius:8px;background:#182230;color:#d7e5f4;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-control .recorder .recording{border-color:#ff8d93;color:#ffb8bc;background:#39222a}.recorded-steps{margin:10px 0 0;padding-left:22px;color:#b9c8d9;font:11px 'Manrope',sans-serif}.recorded-steps li{padding:4px 0}.recorded-steps:empty::before{content:'Пока нет записанных действий';color:#73849a}
+.preview-tools{position:absolute;left:10px;bottom:10px;display:flex;gap:6px;z-index:2}.preview-tools button{border:1px solid #61758b;border-radius:8px;background:rgba(8,16,25,.91);color:#e8f6ff;padding:9px 11px;font:800 12px 'Manrope',sans-serif;cursor:pointer}.preview-tools button.on{border-color:#a8f278;background:#23442a;color:#e6ffd8}.worker-preview.pick img{cursor:crosshair}.preview-hint{position:absolute;left:10px;top:10px;z-index:2;background:rgba(8,16,25,.88);border:1px solid #61758b;border-radius:8px;padding:7px 10px;color:#e8f6ff;font:700 11px 'Manrope',sans-serif;pointer-events:none}.worker-control .recorder{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}.worker-control .recorder button{padding:8px 10px;border:1px solid #465568;border-radius:8px;background:#182230;color:#d7e5f4;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-control .recorder .recording{border-color:#ff8d93;color:#ffb8bc;background:#39222a}.recorded-steps{margin:10px 0 0;padding-left:22px;color:#b9c8d9;font:11px 'Manrope',sans-serif}.recorded-steps li{padding:4px 0}.recorded-steps:empty::before{content:'Пока нет записанных действий';color:#73849a}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.goal{align-items:stretch}.goal .pct{margin-left:0}.wrap{padding:22px 18px 45px}}
 @media(max-width:600px){header{align-items:flex-start}.brand h1{font-size:20px}.brand p{font-size:11px}.logo{width:48px;height:48px}.badge{font-size:10px;padding:9px 10px}.badge .dot{width:8px;height:8px}.goal{padding:24px}.goal .big{font-size:43px}.goal .pct{width:100%}.card{padding:20px}.totals{grid-template-columns:1fr 1fr}.tile:last-child{grid-column:span 2}.worker{flex-wrap:wrap}.worker .act{order:3;text-align:left;flex-basis:100%}}
 </style>
@@ -442,30 +442,79 @@ async function runAction(card, payload, options={}){
   finally{ run.disabled = false; }
 }
 
+function previewPoint(img, clientX, clientY){
+  const rect = img.getBoundingClientRect();
+  const scale = Math.min(rect.width / img.naturalWidth, rect.height / img.naturalHeight);
+  if(!Number.isFinite(scale) || scale <= 0) return null;
+  const width = img.naturalWidth * scale, height = img.naturalHeight * scale;
+  const x = (clientX - rect.left - (rect.width-width)/2) / width;
+  const y = (clientY - rect.top - (rect.height-height)/2) / height;
+  return x>=0 && x<=1 && y>=0 && y<=1 ? {x,y} : null;
+}
+
+function queuePreviewScroll(card, pixels, point){
+  card._wheelDelta = (card._wheelDelta || 0) + pixels;
+  card._wheelPoint = point || card._wheelPoint || {x:0.5,y:0.5};
+  if(card._wheelTimer) return;
+  card._wheelTimer = setTimeout(async () => {
+    const amount = Math.max(-3000,Math.min(3000,Math.round(card._wheelDelta)));
+    card._wheelDelta -= amount;
+    if(amount) await runAction(card,{action:'scroll',value:String(amount),...card._wheelPoint},{quiet:true});
+    card._wheelTimer = null;
+    if(Math.abs(card._wheelDelta)>=1) queuePreviewScroll(card,0,card._wheelPoint);
+  },120);
+}
+
+$('workersPanel').addEventListener('wheel', e => {
+  const img = e.target.closest('.worker-preview img');
+  if(!img) return;
+  e.preventDefault();
+  const pixels = e.deltaY * (e.deltaMode === 1 ? 24 : e.deltaMode === 2 ? img.clientHeight : 1);
+  queuePreviewScroll(img.closest('.worker'),pixels,previewPoint(img,e.clientX,e.clientY));
+},{passive:false});
+
+$('workersPanel').addEventListener('pointerdown', e => {
+  if(!e.target.matches('.worker-preview img')) return;
+  e.target.closest('.worker')._pointerStart = {x:e.clientX,y:e.clientY,id:e.pointerId};
+});
+$('workersPanel').addEventListener('pointerup', e => {
+  if(!e.target.matches('.worker-preview img')) return;
+  const card=e.target.closest('.worker'), start=card._pointerStart;
+  card._pointerStart=null;
+  if(!start || start.id!==e.pointerId || card.dataset.previewMode==='pick') return;
+  const dy=start.y-e.clientY;
+  if(Math.abs(dy)<12) return;
+  card._suppressClickUntil=Date.now()+300;
+  const point=previewPoint(e.target,e.clientX,e.clientY);
+  queuePreviewScroll(card,dy * (e.target.naturalHeight/e.target.clientHeight),point);
+});
+
 $('workersPanel').addEventListener('change', e => {
   if(e.target.matches('.action-type')) updateActionFields(e.target.closest('.worker'));
 });
 $('workersPanel').addEventListener('click', async e => {
-  if(e.target.matches('.preview-click,.preview-pick')){
-    const card=e.target.closest('.worker'), mode=e.target.matches('.preview-pick') ? 'pick' : 'click';
-    card.dataset.previewMode = card.dataset.previewMode===mode ? '' : mode;
-    card.querySelector('.worker-preview').classList.toggle('pick',!!card.dataset.previewMode);
-    card.querySelectorAll('.preview-tools button').forEach(b=>b.classList.toggle('on',card.dataset.previewMode===(b.matches('.preview-pick')?'pick':'click')));
-    toast(card.dataset.previewMode ? (mode==='pick' ? 'Нажми на элемент на кадре' : 'Нажми на кадр для клика') : 'Режим выключен');
+  if(e.target.matches('.preview-up,.preview-down')){
+    const card=e.target.closest('.worker');
+    queuePreviewScroll(card,e.target.matches('.preview-up') ? -540 : 540,{x:0.5,y:0.5});
+    return;
+  }
+  if(e.target.matches('.preview-pick')){
+    const card=e.target.closest('.worker');
+    card.dataset.previewMode = card.dataset.previewMode==='pick' ? '' : 'pick';
+    card.querySelector('.worker-preview').classList.toggle('pick',card.dataset.previewMode==='pick');
+    e.target.classList.toggle('on',card.dataset.previewMode==='pick');
+    card.querySelector('.preview-hint').textContent=card.dataset.previewMode==='pick' ? 'Нажми на элемент, чтобы выбрать его' : 'Клик · колесо или перетаскивание для прокрутки';
     return;
   }
   if(e.target.matches('.worker-preview img')){
-    const img = e.target, card = img.closest('.worker'), rect = img.getBoundingClientRect();
-    if(!card.dataset.previewMode) return;
-    const scale = Math.min(rect.width / img.naturalWidth, rect.height / img.naturalHeight);
-    const width = img.naturalWidth * scale, height = img.naturalHeight * scale;
-    const x = (e.clientX - rect.left - (rect.width-width)/2) / width;
-    const y = (e.clientY - rect.top - (rect.height-height)/2) / height;
-    if(x>=0 && x<=1 && y>=0 && y<=1){
+    const img=e.target, card=img.closest('.worker');
+    if(Date.now() < (card._suppressClickUntil || 0)) return;
+    const point=previewPoint(img,e.clientX,e.clientY);
+    if(point){
       if(card.dataset.previewMode==='pick'){
-        const data=await runAction(card,{action:'inspect',x,y},{record:false,refresh:false});
+        const data=await runAction(card,{action:'inspect',...point},{record:false,refresh:false});
         if(data?.ok){ card.querySelector('.worker-control').open=true; card.querySelector('.action-type').value='click'; card.querySelector('.action-kind').value='css'; card.querySelector('.action-query').value=data.selector; updateActionFields(card); }
-      }else runAction(card,{action:'point',x,y});
+      }else runAction(card,{action:'point',...point});
     }
     return;
   }
@@ -602,7 +651,7 @@ function render(data){
       if(!card){
         card = document.createElement('div');
         card.className = 'worker'; card.dataset.id = w.id;
-        card.innerHTML = `<div class="worker-preview"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки" hidden><div class="preview-tools"><button type="button" class="preview-click">↖ Нажать</button><button type="button" class="preview-pick">⌕ Выбрать элемент</button></div><span class="shot-time">Ожидаю кадр…</span></div>
+        card.innerHTML = `<div class="worker-preview"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми или прокрути" draggable="false" hidden><span class="preview-hint">Клик · колесо или перетаскивание для прокрутки</span><div class="preview-tools"><button type="button" class="preview-up" title="Прокрутить вверх">↑ Вверх</button><button type="button" class="preview-down" title="Прокрутить вниз">↓ Вниз</button><button type="button" class="preview-pick">⌕ Выбрать элемент</button></div><span class="shot-time">Ожидаю кадр…</span></div>
           <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
           <div class="worker-actions"><button type="button" class="worker-shot">Обновить кадр</button><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
           <div class="worker-url"></div>

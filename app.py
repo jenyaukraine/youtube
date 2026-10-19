@@ -523,6 +523,11 @@ async def browser_action(job_id: str, worker_id: str, req: BrowserAction):
             if worker:
                 worker.url = page.url
         elif req.action == "scroll":
+            viewport = page.viewport_size
+            if viewport:
+                px = req.x * viewport["width"] if 0 < req.x < 1 else viewport["width"] / 2
+                py = req.y * viewport["height"] if 0 < req.y < 1 else viewport["height"] / 2
+                await page.mouse.move(px, py)
             await page.mouse.wheel(0, max(-3000, min(3000, int(req.value or "500"))))
         elif req.action == "press":
             await page.keyboard.press(req.value, timeout=7000)
