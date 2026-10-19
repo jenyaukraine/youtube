@@ -5,6 +5,7 @@ a recorded macro, a trigger reaction, the HTTP API or the MCP server:
 
     {"action": "click", "kind": "text", "query": "Accept all"}
     {"action": "fill", "kind": "label", "query": "Email", "value": "a@b.c"}
+    {"action": "type", "value": "hello"}            # types into the focused element
     {"action": "point", "x": 0.5, "y": 0.3}
     {"action": "wait", "value": "1500"}
 
@@ -34,7 +35,7 @@ TargetKind = Literal["css", "text", "role", "label", "placeholder", "xpath"]
 
 ALLOWED_ROLES = {"button", "link", "checkbox", "radio", "tab", "menuitem", "textbox",
                  "combobox", "option", "listitem", "heading", "dialog", "img"}
-ELEMENT_ACTIONS = {"click", "wait_click", "dblclick", "fill", "type", "hover", "drag", "select",
+ELEMENT_ACTIONS = {"click", "wait_click", "dblclick", "fill", "hover", "drag", "select",
                    "wait_for", "wait_gone", "text", "attribute", "exists", "count"}
 VALUE_ACTIONS = {"drag", "press", "navigate", "attribute", "wait_url", "select"}
 MAX_TIMEOUT_MS = 180_000
@@ -92,6 +93,8 @@ def validate_step(step: Step) -> Optional[str]:
         return f"Действие {step.action}: укажи элемент"
     if step.action in VALUE_ACTIONS and not step.value.strip():
         return f"Действие {step.action}: укажи значение"
+    if step.action == "type" and not step.value:
+        return "Действие type: укажи текст"
     if step.action == "navigate" and not normalize_url(step.value):
         return "Неверный URL"
     if step.action in {"point", "inspect"} and not (0 <= step.x <= 1 and 0 <= step.y <= 1):
@@ -197,9 +200,16 @@ async def run_step(page: Page, step: Step, *, screenshot_sink=None) -> Dict[str,
                     return {"ok": False, "error": err}
                 await loc.scroll_into_view_if_needed(timeout=timeout)
             else:
+                viewport = page.viewport_size
+                if viewport:  # wheel scrolls the element under the pointer, so place it first
+                    px = step.x * viewport["width"] if 0 < step.x < 1 else viewport["width"] / 2
+                    py = step.y * viewport["height"] if 0 < step.y < 1 else viewport["height"] / 2
+                    await page.mouse.move(px, py)
                 await page.mouse.wheel(0, max(-5000, min(5000, delta)))
         elif step.action == "press":
             await page.keyboard.press(step.value.strip())
+        elif step.action == "type" and not query:
+            await page.keyboard.type(step.value, delay=0)   # into whatever element has focus
         elif step.action == "wait":
             await asyncio.sleep(min(60.0, max(0.0, float(step.value or "1000") / 1000)))
         elif step.action == "wait_url":

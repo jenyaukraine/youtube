@@ -213,9 +213,13 @@ input::placeholder{color:#738198}.hint{font-size:11.5px;color:var(--txt3);line-h
 .system-foot{display:flex;gap:15px;flex-wrap:wrap;font-size:11px;color:var(--txt3)}.system-foot b{color:var(--txt2);font-weight:800}
 .worker-stop{border:1px solid #5c4b54;border-radius:8px;background:#261c25;color:#ff9ba3;padding:7px 9px;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-stop:hover{background:#38242b;border-color:var(--red)}
 .worker{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:12px}
-.worker-preview{position:relative;grid-column:1/-1;aspect-ratio:16/9;max-height:270px;overflow:hidden;border:1px solid #354153;border-radius:10px;background:#090d14;display:grid;place-items:center;color:var(--txt3);font-size:12px}
+.worker-preview{position:relative;grid-column:1/-1;aspect-ratio:1365/768;overflow:hidden;border:1px solid #354153;border-radius:10px;background:#090d14;display:grid;place-items:center;color:var(--txt3);font-size:12px}
 .worker-preview img{width:100%;height:100%;object-fit:contain;display:block}
-.worker-preview img{cursor:crosshair}
+.worker-preview img{cursor:pointer;user-select:none;-webkit-user-drag:none;touch-action:none}
+.worker-preview.expanded{position:fixed;inset:12px;width:auto;height:auto;aspect-ratio:auto;z-index:100;border:2px solid var(--green);box-shadow:0 0 0 100vmax rgba(0,0,0,.8),0 24px 80px #000}
+.worker-preview:focus{outline:2px solid var(--green)}
+.preview-key-capture{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;resize:none}
+body.preview-expanded{overflow:hidden}
 .worker-preview .preview-note{position:absolute;inset:0;display:grid;place-items:center;background:#090d14;color:var(--txt3)}
 .worker-preview [hidden]{display:none}
 .worker-meta{display:flex;align-items:center;gap:12px;min-width:0}.worker-meta .act{min-width:0}.worker .secs{white-space:nowrap}
@@ -226,7 +230,8 @@ input::placeholder{color:#738198}.hint{font-size:11.5px;color:var(--txt3);line-h
 footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:#475567}
 .favorite-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.favorite-list button{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid #506054;border-radius:8px;background:#17241c;color:#c9eaba;padding:8px 10px;cursor:pointer;font:11px 'Manrope',sans-serif}
 @media(max-width:600px){.control-grid{grid-template-columns:1fr}.worker-actions{grid-column:1/-1;justify-content:flex-start}.worker-meta{grid-column:1/-1;flex-wrap:wrap}}
-.preview-tools{position:absolute;left:8px;bottom:8px;display:flex;gap:6px;z-index:2}.preview-tools button{border:1px solid #61758b;border-radius:7px;background:rgba(8,16,25,.88);color:#e8f6ff;padding:7px 9px;font:800 11px 'Manrope',sans-serif;cursor:pointer}.preview-tools button.on{border-color:#a8f278;background:#23442a;color:#e6ffd8}.worker-preview.pick img{cursor:crosshair}.worker-preview:not(.pick) img{cursor:default}.worker-control .recorder{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}.worker-control .recorder button{padding:8px 10px;border:1px solid #465568;border-radius:8px;background:#182230;color:#d7e5f4;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-control .recorder .recording{border-color:#ff8d93;color:#ffb8bc;background:#39222a}.recorded-steps{margin:10px 0 0;padding-left:22px;color:#b9c8d9;font:11px 'Manrope',sans-serif}.recorded-steps li{padding:4px 0}.recorded-steps:empty::before{content:'Пока нет записанных действий';color:#73849a}
+.preview-tools{position:absolute;left:10px;bottom:10px;display:flex;gap:6px;z-index:2}.preview-tools button{border:1px solid #61758b;border-radius:8px;background:rgba(8,16,25,.91);color:#e8f6ff;padding:9px 11px;font:800 12px 'Manrope',sans-serif;cursor:pointer}.preview-tools button.on{border-color:#a8f278;background:#23442a;color:#e6ffd8}.worker-preview.pick img{cursor:crosshair}.preview-hint{position:absolute;left:10px;top:10px;z-index:2;background:rgba(8,16,25,.88);border:1px solid #61758b;border-radius:8px;padding:7px 10px;color:#e8f6ff;font:700 11px 'Manrope',sans-serif;pointer-events:none}.worker-control .recorder{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}.worker-control .recorder button{padding:8px 10px;border:1px solid #465568;border-radius:8px;background:#182230;color:#d7e5f4;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-control .recorder .recording{border-color:#ff8d93;color:#ffb8bc;background:#39222a}.recorded-steps{margin:10px 0 0;padding-left:22px;color:#b9c8d9;font:11px 'Manrope',sans-serif}.recorded-steps li{padding:4px 0}.recorded-steps:empty::before{content:'Пока нет записанных действий';color:#73849a}
+.preview-typebar{position:absolute;left:10px;bottom:52px;z-index:3;display:flex;gap:6px;max-width:calc(100% - 20px);padding:8px;border:1px solid #61758b;border-radius:9px;background:rgba(8,16,25,.96)}.preview-typebar[hidden]{display:none}.preview-typebar input{width:min(300px,42vw);min-width:90px;padding:8px 10px;border:1px solid #61758b;border-radius:7px;background:#101722;color:#fff;font:13px 'Manrope',sans-serif}.preview-typebar button{border:1px solid #61758b;border-radius:7px;background:#263b29;color:#e6ffd8;padding:8px 10px;font:800 11px 'Manrope',sans-serif;cursor:pointer}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.goal{align-items:stretch}.goal .pct{margin-left:0}.wrap{padding:22px 18px 45px}}
 @media(max-width:600px){header{align-items:flex-start}.brand h1{font-size:20px}.brand p{font-size:11px}.logo{width:48px;height:48px}.badge{font-size:10px;padding:9px 10px}.badge .dot{width:8px;height:8px}.goal{padding:24px}.goal .big{font-size:43px}.goal .pct{width:100%}.card{padding:20px}.totals{grid-template-columns:1fr 1fr}.tile:last-child{grid-column:span 2}.worker{flex-wrap:wrap}.worker .act{order:3;text-align:left;flex-basis:100%}}
 
@@ -406,7 +411,7 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
 
 <script>
 const $ = id => document.getElementById(id);
-let ws, wsAlive = false, curJob = null, tick = 0;
+let ws, wsAlive = false, curJob = null, tick = 0, activePreviewCard = null;
 const cpuSamples = [];
 window.addEventListener('pageshow', () => setTimeout(() => { if ($('url').value.trim().toLowerCase() === 'admin') $('url').value = ''; }, 100));
 
@@ -453,7 +458,8 @@ async function start(){
 }
 
 async function stopAll(){
-  await fetch('/api/stop',{method:'POST'});
+  if(!curJob){ toast('Нет своей активной сессии','err'); return; }
+  await fetch(`/api/job/${encodeURIComponent(curJob)}/stop`,{method:'POST'});
   toast('Останавливаю…');
 }
 
@@ -477,6 +483,7 @@ function renderSteps(card){
   list.replaceChildren(...(card._steps||[]).map((step,i)=>{ const item=document.createElement('li'); item.textContent=`${i+1}. ${step.action} ${step.query||step.value||((step.x||0).toFixed(2)+', '+(step.y||0).toFixed(2))}`; return item; }));
 }
 async function runAction(card, payload, options={}){
+  card._lastTouch=Date.now();
   const button = card.querySelector('.worker-stop');
   const job = button.dataset.job, worker = button.dataset.worker;
   const control_token = sessionStorage.getItem('katya_control_' + job) || '';
@@ -490,7 +497,7 @@ async function runAction(card, payload, options={}){
     });
     const data = await r.json();
     if(!options.quiet) toast(data.ok ? (payload.action==='inspect' ? 'Элемент выбран' : 'Действие выполнено') : (data.error || 'Действие не выполнено'),data.ok ? 'ok' : 'err');
-    if(data.ok && card.dataset.recording==='1' && options.record!==false && payload.action!=='inspect'){
+    if(data.ok && card.dataset.recording==='1' && options.record!==false && !['inspect','type'].includes(payload.action)){
       card._steps.push(payload); renderSteps(card);
     }
     if(data.ok && payload.action!=='inspect' && options.refresh!==false) setTimeout(() => { if(card.isConnected) loadShot(card,true); }, payload.action === 'navigate' ? 2500 : 800);
@@ -498,6 +505,74 @@ async function runAction(card, payload, options={}){
   }catch(e){ if(!options.quiet) toast('Ошибка управления: ' + e.message,'err'); return null; }
   finally{ run.disabled = false; }
 }
+
+function sendPreviewInput(card,payload){
+  card._inputChain=(card._inputChain || Promise.resolve()).then(() => runAction(card,payload,{quiet:true,record:false}));
+  return card._inputChain;
+}
+function flushPreviewText(card){
+  clearTimeout(card._textTimer);
+  card._textTimer=null;
+  const value=card._pendingText || '';
+  card._pendingText='';
+  return value ? sendPreviewInput(card,{action:'type',value}) : (card._inputChain || Promise.resolve());
+}
+function queuePreviewText(card,text){
+  card._pendingText=(card._pendingText || '')+text;
+  clearTimeout(card._textTimer);
+  card._textTimer=setTimeout(() => flushPreviewText(card),120);
+}
+async function pressPreviewKey(card,key){
+  await flushPreviewText(card);
+  return sendPreviewInput(card,{action:'press',value:key});
+}
+
+function previewPoint(img, clientX, clientY){
+  const rect = img.getBoundingClientRect();
+  const scale = Math.min(rect.width / img.naturalWidth, rect.height / img.naturalHeight);
+  if(!Number.isFinite(scale) || scale <= 0) return null;
+  const width = img.naturalWidth * scale, height = img.naturalHeight * scale;
+  const x = (clientX - rect.left - (rect.width-width)/2) / width;
+  const y = (clientY - rect.top - (rect.height-height)/2) / height;
+  return x>=0 && x<=1 && y>=0 && y<=1 ? {x,y} : null;
+}
+
+function queuePreviewScroll(card, pixels, point){
+  card._wheelDelta = (card._wheelDelta || 0) + pixels;
+  card._wheelPoint = point || card._wheelPoint || {x:0.5,y:0.5};
+  if(card._wheelTimer) return;
+  card._wheelTimer = setTimeout(async () => {
+    const amount = Math.max(-3000,Math.min(3000,Math.round(card._wheelDelta)));
+    card._wheelDelta -= amount;
+    if(amount) await runAction(card,{action:'scroll',value:String(amount),...card._wheelPoint},{quiet:true});
+    card._wheelTimer = null;
+    if(Math.abs(card._wheelDelta)>=1) queuePreviewScroll(card,0,card._wheelPoint);
+  },120);
+}
+
+$('workersPanel').addEventListener('wheel', e => {
+  const img = e.target.closest('.worker-preview img');
+  if(!img) return;
+  e.preventDefault();
+  const pixels = e.deltaY * (e.deltaMode === 1 ? 24 : e.deltaMode === 2 ? img.clientHeight : 1);
+  queuePreviewScroll(img.closest('.worker'),pixels,previewPoint(img,e.clientX,e.clientY));
+},{passive:false});
+
+$('workersPanel').addEventListener('pointerdown', e => {
+  if(!e.target.matches('.worker-preview img') || e.button!==0) return;
+  e.target.closest('.worker')._pointerStart = {x:e.clientX,y:e.clientY,id:e.pointerId};
+});
+$('workersPanel').addEventListener('pointerup', e => {
+  if(!e.target.matches('.worker-preview img')) return;
+  const card=e.target.closest('.worker'), start=card._pointerStart;
+  card._pointerStart=null;
+  if(!start || start.id!==e.pointerId || card.dataset.previewMode==='pick') return;
+  const dy=start.y-e.clientY;
+  if(Math.abs(dy)<12) return;
+  card._suppressClickUntil=Date.now()+300;
+  const point=previewPoint(e.target,e.clientX,e.clientY);
+  queuePreviewScroll(card,dy * (e.target.naturalHeight/e.target.clientHeight),point);
+});
 
 $('workersPanel').addEventListener('change', async e => {
   if(e.target.matches('.action-type')) updateActionFields(e.target.closest('.worker'));
@@ -511,27 +586,57 @@ $('workersPanel').addEventListener('change', async e => {
   }
 });
 $('workersPanel').addEventListener('click', async e => {
-  if(e.target.matches('.preview-click,.preview-pick')){
-    const card=e.target.closest('.worker'), mode=e.target.matches('.preview-pick') ? 'pick' : 'click';
-    card.dataset.previewMode = card.dataset.previewMode===mode ? '' : mode;
-    card.querySelector('.worker-preview').classList.toggle('pick',!!card.dataset.previewMode);
-    card.querySelectorAll('.preview-tools button').forEach(b=>b.classList.toggle('on',card.dataset.previewMode===(b.matches('.preview-pick')?'pick':'click')));
-    toast(card.dataset.previewMode ? (mode==='pick' ? 'Нажми на элемент на кадре' : 'Нажми на кадр для клика') : 'Режим выключен');
+  if(e.target.matches('.preview-expand')){
+    const preview=e.target.closest('.worker-preview');
+    const expanded=preview.classList.toggle('expanded');
+    document.body.classList.toggle('preview-expanded',expanded);
+    e.target.textContent=expanded ? '⤢ Свернуть' : '⛶ Развернуть';
+    return;
+  }
+  if(e.target.matches('.preview-up,.preview-down')){
+    const card=e.target.closest('.worker');
+    queuePreviewScroll(card,e.target.matches('.preview-up') ? -540 : 540,{x:0.5,y:0.5});
+    return;
+  }
+  if(e.target.matches('.preview-pick')){
+    const card=e.target.closest('.worker');
+    card.dataset.previewMode = card.dataset.previewMode==='pick' ? '' : 'pick';
+    card.querySelector('.worker-preview').classList.toggle('pick',card.dataset.previewMode==='pick');
+    e.target.classList.toggle('on',card.dataset.previewMode==='pick');
+    card.querySelector('.preview-hint').textContent=card.dataset.previewMode==='pick' ? 'Нажми на элемент, чтобы выбрать его' : 'Кликни в поле и печатай · колесо для прокрутки';
     return;
   }
   if(e.target.matches('.worker-preview img')){
-    const img = e.target, card = img.closest('.worker'), rect = img.getBoundingClientRect();
-    if(!card.dataset.previewMode) return;
-    const scale = Math.min(rect.width / img.naturalWidth, rect.height / img.naturalHeight);
-    const width = img.naturalWidth * scale, height = img.naturalHeight * scale;
-    const x = (e.clientX - rect.left - (rect.width-width)/2) / width;
-    const y = (e.clientY - rect.top - (rect.height-height)/2) / height;
-    if(x>=0 && x<=1 && y>=0 && y<=1){
+    const img=e.target, card=img.closest('.worker');
+    if(Date.now() < (card._suppressClickUntil || 0)) return;
+    const point=previewPoint(img,e.clientX,e.clientY);
+    if(point){
       if(card.dataset.previewMode==='pick'){
-        const data=await runAction(card,{action:'inspect',x,y},{record:false,refresh:false});
+        const data=await runAction(card,{action:'inspect',...point},{record:false,refresh:false});
         if(data?.ok){ card.querySelector('.worker-control').open=true; card.querySelector('.action-type').value='click'; card.querySelector('.action-kind').value='css'; card.querySelector('.action-query').value=data.selector; updateActionFields(card); }
-      }else runAction(card,{action:'point',x,y});
+      }else {
+        activePreviewCard=card;
+        card.querySelector('.preview-key-capture').focus();
+        sendPreviewInput(card,{action:'point',...point});
+      }
     }
+    return;
+  }
+  if(e.target.matches('.preview-keyboard')){
+    const bar=e.target.closest('.worker-preview').querySelector('.preview-typebar');
+    bar.hidden=!bar.hidden;
+    if(!bar.hidden) bar.querySelector('input').focus();
+    return;
+  }
+  if(e.target.matches('.preview-type-send')){
+    const card=e.target.closest('.worker'), field=card.querySelector('.preview-typebar input');
+    if(field.value){ sendPreviewInput(card,{action:'type',value:field.value}); field.value=''; }
+    field.focus();
+    return;
+  }
+  if(e.target.matches('.preview-enter,.preview-tab,.preview-backspace')){
+    const card=e.target.closest('.worker');
+    pressPreviewKey(card,e.target.matches('.preview-enter') ? 'Enter' : e.target.matches('.preview-tab') ? 'Tab' : 'Backspace');
     return;
   }
   if(e.target.matches('.record-toggle,.record-replay,.record-copy,.record-clear,.record-save')){
@@ -587,16 +692,82 @@ $('workersPanel').addEventListener('click', async e => {
   } catch { toast('Нет связи с сервером','err'); }
   button.disabled = false;
 });
+document.addEventListener('keydown', e => {
+  if(e.key!=='Escape') return;
+  const preview=document.querySelector('.worker-preview.expanded');
+  if(!preview) return;
+  preview.classList.remove('expanded');
+  document.body.classList.remove('preview-expanded');
+  preview.querySelector('.preview-expand').textContent='⛶ Развернуть';
+});
+document.addEventListener('pointerdown', e => {
+  if(!e.target.closest('.worker-preview')) activePreviewCard=null;
+},true);
+document.addEventListener('keydown', e => {
+  const preview=e.target.closest('.worker-preview');
+  if(e.target.matches('.preview-key-capture') && e.key.length===1 && !e.ctrlKey && !e.metaKey && !e.altKey) return;
+  if(e.target.matches('.preview-typebar input')){
+    if(e.key==='Enter'){ e.preventDefault(); preview.querySelector('.preview-type-send').click(); }
+    return;
+  }
+  if(e.target.closest('input,textarea,select,[contenteditable="true"]') && !e.target.matches('.preview-key-capture')) return;
+  const card=preview?.closest('.worker') || activePreviewCard;
+  if(!card?.isConnected) return;
+  if(e.key.length===1 && !e.ctrlKey && !e.metaKey && !e.altKey){
+    e.preventDefault(); queuePreviewText(card,e.key); return;
+  }
+  const keys=new Set(['Backspace','Delete','Enter','Tab','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','PageUp','PageDown']);
+  if(keys.has(e.key)){
+    e.preventDefault(); pressPreviewKey(card,e.key); return;
+  }
+  if((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='a'){
+    e.preventDefault(); pressPreviewKey(card,'ControlOrMeta+A');
+  }
+});
+document.addEventListener('input', e => {
+  if(!e.target.matches('.preview-key-capture') || e.isComposing) return;
+  const text=e.target.value;
+  e.target.value='';
+  if(text) queuePreviewText(e.target.closest('.worker'),text);
+});
+document.addEventListener('compositionend', e => {
+  if(!e.target.matches('.preview-key-capture')) return;
+  const text=e.target.value;
+  e.target.value='';
+  if(text) queuePreviewText(e.target.closest('.worker'),text);
+});
+document.addEventListener('paste', e => {
+  if(e.target.closest('input,textarea,[contenteditable="true"]')) return;
+  const card=e.target.closest('.worker-preview')?.closest('.worker') || activePreviewCard;
+  if(!card?.isConnected) return;
+  const text=e.clipboardData?.getData('text/plain');
+  if(text){ e.preventDefault(); sendPreviewInput(card,{action:'type',value:text.slice(0,2048)}); }
+});
 
 function loadShot(card, force=false){
+  if(card._shotLoading) return;
   const img = card.querySelector('img');
   const job = card.querySelector('[data-job]').dataset.job;
   const worker = card.querySelector('[data-worker]').dataset.worker;
   const now = Date.now();
-  card.dataset.shotBucket = String(Math.floor(now/20000));
-  card.querySelector('.shot-time').textContent = 'Обновляю…';
+  card._shotLoading=true;
+  card.querySelector('.shot-time').textContent = img.hidden ? 'Подключаю кадр…' : '● Live';
   img.src = `/api/worker/${encodeURIComponent(job)}/${encodeURIComponent(worker)}/screenshot?force=${force ? 1 : 0}&t=${now}`;
 }
+
+setInterval(() => {
+  if(document.hidden) return;
+  const cards=[...$('workersPanel').querySelectorAll('.worker')];
+  if(!cards.length) return;
+  const now=Date.now();
+  const recent=cards.filter(card => now-(card._lastTouch||0)<15000).sort((a,b)=>(b._lastTouch||0)-(a._lastTouch||0))[0];
+  const focused=cards.find(card=>card.querySelector('.worker-preview.expanded')) || recent || cards[0];
+  for(const card of cards){
+    if(now<(card._nextShotAt||0)) continue;
+    loadShot(card,true);
+    card._nextShotAt=now+(card===focused ? 700 : 3500);
+  }
+},250);
 
 function promoUrl(){
   const raw = $('url').value.trim();
@@ -652,7 +823,8 @@ function render(data){
   // header
   $('connDot').className = 'dot' + (anyRunning ? ' busy':'');
   $('connTxt').textContent = anyRunning ? 'работает' : (wsAlive ? 'онлайн' : 'оффлайн');
-  $('btnStop').disabled = !anyRunning;
+  if(!active.some(j => j.id === curJob)) curJob = active.find(j => sessionStorage.getItem('katya_control_' + j.id))?.id || null;
+  $('btnStop').disabled = !curJob;
 
   // goal
   $('goalHours').textContent = fmtH(total);
@@ -675,7 +847,7 @@ function render(data){
       if(!card){
         card = document.createElement('div');
         card.className = 'worker'; card.dataset.id = w.id;
-        card.innerHTML = `<div class="worker-preview"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки" hidden><div class="preview-tools"><button type="button" class="preview-click">↖ Нажать</button><button type="button" class="preview-pick">⌕ Выбрать элемент</button></div><span class="shot-time">Ожидаю кадр…</span></div>
+        card.innerHTML = `<div class="worker-preview" tabindex="0"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми или прокрути" draggable="false" hidden><textarea class="preview-key-capture" aria-label="Клавиатура вкладки" autocomplete="off"></textarea><span class="preview-hint">Кликни в поле и печатай · колесо для прокрутки</span><div class="preview-typebar" hidden><input type="text" placeholder="Текст в выбранное поле" aria-label="Текст в выбранное поле" autocomplete="off"><button type="button" class="preview-type-send">Написать</button><button type="button" class="preview-enter">Enter</button><button type="button" class="preview-tab">Tab</button><button type="button" class="preview-backspace">⌫</button></div><div class="preview-tools"><button type="button" class="preview-up" title="Прокрутить вверх">↑ Вверх</button><button type="button" class="preview-down" title="↓ Вниз">↓ Вниз</button><button type="button" class="preview-keyboard">⌨ Ввод</button><button type="button" class="preview-pick">⌕ Выбрать элемент</button><button type="button" class="preview-expand">⛶ Развернуть</button></div><span class="shot-time">Ожидаю кадр…</span></div>
           <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
           <div class="worker-actions"><button type="button" class="worker-shot">Обновить кадр</button><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
           <div class="worker-url"></div>
@@ -691,8 +863,8 @@ function render(data){
             <ol class="recorded-steps"></ol>
           </details>`;
         const img = card.querySelector('img');
-        img.onload = () => { img.hidden = false; card.querySelector('.preview-note').hidden = true; card.querySelector('.shot-time').textContent = 'Кадр ' + new Date().toLocaleTimeString('ru-RU'); };
-        img.onerror = () => { card.querySelector('.shot-time').textContent = 'Кадр недоступен'; if(img.hidden) card.querySelector('.preview-note').textContent = 'Снимок пока недоступен'; };
+        img.onload = () => { card._shotLoading=false; img.hidden = false; card.querySelector('.preview-note').hidden = true; card.querySelector('.shot-time').textContent = '● Live ' + new Date().toLocaleTimeString('ru-RU'); };
+        img.onerror = () => { card._shotLoading=false; card.querySelector('.shot-time').textContent = 'Кадр недоступен'; if(img.hidden) card.querySelector('.preview-note').textContent = 'Снимок пока недоступен'; };
         panel.append(card);
         updateActionFields(card);
         card._steps=[];
@@ -705,8 +877,7 @@ function render(data){
       card.querySelector('.secs').textContent = (w.watch_seconds/3600).toFixed(3) + ' ч';
       card.querySelector('.worker-url').textContent = w.url || w._j.url;
       card.querySelectorAll('.worker-actions button').forEach(button => { button.dataset.job = w._j.id; button.dataset.worker = w.id; });
-      const bucket = Math.floor(Date.now()/20000);
-      if(card.dataset.shotBucket !== String(bucket)) loadShot(card);
+      if(!card._firstShot){ card._firstShot=true; loadShot(card,true); }
     });
   }
 
