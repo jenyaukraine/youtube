@@ -55,10 +55,57 @@ function renderSteps(){
   if(!s.steps.length){list.innerHTML='<div class="hint">Шагов пока нет. Запиши действия во вкладке или добавь шаг здесь.</div>';return;}
   s.steps.forEach((step,index)=>{
     const row=document.createElement('div');row.className='step';row.dataset.index=index;
-    row.innerHTML=`<div class="step-head"><strong>Шаг ${index+1}</strong><div class="row"><button class="btn tiny move-up" title="Вверх">↑</button><button class="btn tiny move-down" title="Вниз">↓</button><button class="btn tiny danger remove-step" title="Удалить">×</button></div></div>
+    row.innerHTML=`<div class="step-head"><strong>Шаг ${index+1}</strong><span class="step-summary"></span><div class="row"><button class="btn tiny move-up" title="Вверх">↑</button><button class="btn tiny move-down" title="Вниз">↓</button><button class="btn tiny danger remove-step" title="Удалить">×</button></div></div>
       <div class="step-grid"><div><label>Действие</label><select class="step-action">${optionHtml(ACTIONS,step.action)}</select></div><div><label>Поиск элемента</label><select class="step-kind">${optionHtml(KINDS,step.kind||'css')}</select></div><div><label>Элемент / селектор</label><input class="step-query" placeholder="button, Продолжить, Email" value="${esc(step.query||'')}"></div><div><label>Значение / {{переменная}}</label><input class="step-value" placeholder="{{username}}, Enter, 500" value="${esc(step.value||'')}"></div><div><label>X (0–1)</label><input class="step-x" type="number" min="0" max="1" step="0.01" value="${Number(step.x)||0}"></div><div><label>Y (0–1)</label><input class="step-y" type="number" min="0" max="1" step="0.01" value="${Number(step.y)||0}"></div><div><label>Конец X (0–1)</label><input class="step-end-x" type="number" min="0" max="1" step="0.01" value="${Number(step.end_x)||0}"></div><div><label>Конец Y (0–1)</label><input class="step-end-y" type="number" min="0" max="1" step="0.01" value="${Number(step.end_y)||0}"></div><div class="wide hint">Для клика по кадру нужны X/Y. Для ввода и клика по элементу укажи способ поиска и элемент. Пауза задаётся в миллисекундах.</div></div>`;
+    applyStepFields(row,step);
     list.append(row);
   });
+}
+const STEP_FIELDS={
+  wait:['value'], point:['x','y'], move:['x','y'], mouse_drag:['x','y','end_x','end_y'],
+  click:['kind','query'], wait_click:['kind','query'], dblclick:['kind','query'], hover:['kind','query'],
+  fill:['kind','query','value'], select:['kind','query','value'], drag:['kind','query','value'],
+  type:['value','kind','query'], press:['value'], scroll:['value','kind','query'], navigate:['value'],
+};
+const STEP_HINTS={
+  wait:'Пауза в миллисекундах: 1000 = 1 секунда.', point:'Точка на кадре в долях ширины и высоты: 0.5, 0.5 — центр.',
+  move:'Курсор переместится в точку без клика.', mouse_drag:'Нажать в точке X/Y, протянуть до «Конец X/Y», отпустить.',
+  click:'Способ поиска и сам элемент: CSS-селектор, видимый текст, роль или подпись.',
+  wait_click:'Ждёт появления элемента до 2 минут и кликает один раз.', fill:'Очищает поле и вводит значение; можно {{переменную}}.',
+  type:'Печатает по буквам в активное поле; элемент указывать не обязательно.', press:'Клавиша: Enter, Escape, Tab, ArrowDown, Control+A.',
+  scroll:'Пикселей прокрутки: положительное — вниз, отрицательное — вверх. Или элемент, к которому прокрутить.',
+  navigate:'Полный адрес с http:// или https://.', drag:'Элемент-источник слева, элемент-цель в значении.', hover:'Наведение без клика.',
+  select:'Значение option в выпадающем списке.',
+};
+const STEP_VALUE_PLACEHOLDER={wait:'1500',press:'Enter',scroll:'600',navigate:'https://…',type:'{{username}}',fill:'{{password}}',select:'значение option',drag:'целевой элемент'};
+function stepSummary(step){
+  const v=step.value==null?'':String(step.value), q=step.query?`«${String(step.query).slice(0,32)}»`:'';
+  const pct=n=>`${Math.round((Number(n)||0)*100)}%`;
+  const text=/{{\s*password\s*}}/.test(v)?'••••••':v.length>24?`«${v.slice(0,24)}…»`:(v?`«${v}»`:'');
+  switch(step.action){
+    case 'wait': return `${((Number(v)||0)/1000).toFixed(1)} с`;
+    case 'point': return `${pct(step.x)}, ${pct(step.y)}`;
+    case 'move': return `${pct(step.x)}, ${pct(step.y)}`;
+    case 'mouse_drag': return `${pct(step.x)}, ${pct(step.y)} → ${pct(step.end_x)}, ${pct(step.end_y)}`;
+    case 'scroll': return q?`к ${q}`:`${Number(v||500)<0?'вверх':'вниз'} ${Math.abs(Number(v||500))} px`;
+    case 'press': return v||'?';
+    case 'navigate': return v.replace(/^https?:\/\//,'').slice(0,40);
+    case 'type': return text;
+    case 'fill': case 'select': return `${q} → ${text}`;
+    case 'drag': return `${q} → ${text}`;
+    default: return q||text;
+  }
+}
+function applyStepFields(row,step){
+  const fields=STEP_FIELDS[step.action]||['kind','query','value','x','y','end_x','end_y'];
+  for(const [cls,key] of [['step-kind','kind'],['step-query','query'],['step-value','value'],['step-x','x'],['step-y','y'],['step-end-x','end_x'],['step-end-y','end_y']]){
+    const el=row.querySelector('.'+cls); if(!el) continue;
+    el.parentElement.hidden=!fields.includes(key);
+    el.parentElement.classList.toggle('optional',step.action==='type'&&key!=='value'||step.action==='scroll'&&key!=='value');
+  }
+  const value=row.querySelector('.step-value'); if(value) value.placeholder=STEP_VALUE_PLACEHOLDER[step.action]||'{{username}}, Enter, 500';
+  const hint=row.querySelector('.step-grid .hint'); if(hint) hint.textContent=STEP_HINTS[step.action]||'Для клика по кадру нужны X/Y. Для ввода и клика по элементу укажи способ поиска и элемент.';
+  const sum=row.querySelector('.step-summary'); if(sum){ sum.textContent=`${ACTIONS[step.action]||step.action} · ${stepSummary(step)}`; }
 }
 function renderVariables(){
   const s=current(),grid=$('variableGrid');grid.replaceChildren();
@@ -75,6 +122,8 @@ function bindEditor(){
   $('startUrl').onchange=e=>{s.startUrl=e.target.value.trim();save();renderList();};
   $('wordList').onchange=e=>{s.wordList=e.target.value;save();};
   $('variableGrid').onchange=e=>{if(!e.target.dataset.variable||e.target.dataset.variable==='password')return;s.variables=s.variables||{};s.variables[e.target.dataset.variable]=e.target.value;save();};
+  $('stepList').addEventListener('input',e=>{const row=e.target.closest('.step');if(!row)return;const step=s.steps[+row.dataset.index];if(step) applyStepFields(row,{...step,action:row.querySelector('.step-action').value,kind:row.querySelector('.step-kind').value,query:row.querySelector('.step-query').value,value:row.querySelector('.step-value').value,x:row.querySelector('.step-x').value,y:row.querySelector('.step-y').value,end_x:row.querySelector('.step-end-x').value,end_y:row.querySelector('.step-end-y').value});});
+  $('stepList').addEventListener('change',e=>{const row=e.target.closest('.step');if(!row)return;const step=s.steps[+row.dataset.index];if(step) applyStepFields(row,{...step,action:row.querySelector('.step-action').value,kind:row.querySelector('.step-kind').value,query:row.querySelector('.step-query').value,value:row.querySelector('.step-value').value,x:row.querySelector('.step-x').value,y:row.querySelector('.step-y').value,end_x:row.querySelector('.step-end-x').value,end_y:row.querySelector('.step-end-y').value});});
   $('stepList').onchange=e=>{const row=e.target.closest('.step');if(!row)return;const step=s.steps[+row.dataset.index];step.action=row.querySelector('.step-action').value;step.kind=row.querySelector('.step-kind').value;step.query=row.querySelector('.step-query').value;step.value=row.querySelector('.step-value').value;step.x=Number(row.querySelector('.step-x').value);step.y=Number(row.querySelector('.step-y').value);step.end_x=Number(row.querySelector('.step-end-x').value);step.end_y=Number(row.querySelector('.step-end-y').value);save();if(e.target.matches('.step-value'))renderVariables();};
   $('stepList').onclick=e=>{const row=e.target.closest('.step');if(!row)return;const i=+row.dataset.index;if(e.target.matches('.remove-step'))s.steps.splice(i,1);else if(e.target.matches('.move-up')&&i>0)[s.steps[i-1],s.steps[i]]=[s.steps[i],s.steps[i-1]];else if(e.target.matches('.move-down')&&i<s.steps.length-1)[s.steps[i+1],s.steps[i]]=[s.steps[i],s.steps[i+1]];else return;save();renderSteps();renderVariables();renderList();};
   $('addStep').onclick=()=>{s.steps.push({action:'click',kind:'css',query:'',value:'',x:0,y:0});save();renderSteps();renderList();};

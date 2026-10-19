@@ -496,3 +496,14 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var
 .worker-url:hover::after{content:'  ✎ изменить';color:var(--txt-3);font:600 10.5px var(--font)}
 .worker-url-edit{grid-column:1/-1;min-height:34px;padding:6px 10px;font:12px var(--mono);border-color:var(--info);box-shadow:0 0 0 3px rgba(127,184,255,.15)}
 .worker-url-edit[hidden]{display:none}
+
+/* ---------- 19. Редактор шагов на странице сценариев ---------- */
+.step-head{display:flex;align-items:center;gap:10px}
+.step-head strong{font-size:12px;color:var(--accent);white-space:nowrap}
+.step-head .step-summary{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 13px var(--font);color:var(--txt)}
+.step-head .row{margin-left:auto}
+.step-grid>div[hidden]{display:none}
+.step-grid>div.optional label::after{content:' · необязательно';color:var(--txt-3);text-transform:none;letter-spacing:0;font-weight:500}
+.step-grid .hint{margin-top:2px}
+.step{padding:14px 16px}
+.step .step-grid{margin-top:4px}
