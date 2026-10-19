@@ -35,6 +35,7 @@ if not BROWSER_CHANNEL and os.name == "nt":
                                "Google", "Chrome", "Application", "chrome.exe")
     if os.path.isfile(chrome_path):
         BROWSER_CHANNEL = "chrome"
+SCENARIO_START_DELAY = float(os.environ.get("KATYA_SCENARIO_DELAY", "1"))  # seconds between page load and first step
 MAX_WORKERS = max(1, min(int(os.environ.get("KATYA_MAX_TABS", "8")), 64))
 os.makedirs(FILES_DIR, exist_ok=True)
 
@@ -280,9 +281,9 @@ async def worker_loop(job: Job, w: Worker, page: Page):
         if job.steps:
             w.scenario_total = len(job.steps)
             w.scenario_phase = "waiting"
-            w.scenario_wait_until = time.time() + 10
-            w.last_action = "Сценарий начнётся через 10 секунд"
-            await asyncio.sleep(10)
+            w.scenario_wait_until = time.time() + SCENARIO_START_DELAY
+            w.last_action = f"Сценарий начнётся через {SCENARIO_START_DELAY:g} с"
+            await asyncio.sleep(SCENARIO_START_DELAY)
             w.scenario_wait_until = 0
             def on_scenario_progress(index, phase, result):
                 w.scenario_current = index

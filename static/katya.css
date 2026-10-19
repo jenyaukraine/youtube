@@ -524,3 +524,16 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var
 .auto-item .ops .run{color:var(--info)}
 .preview-hit{position:absolute;z-index:3;pointer-events:none;border:2px solid var(--accent);border-radius:4px;box-shadow:0 0 0 2px rgba(0,0,0,.5),0 0 24px rgba(143,227,162,.7);animation:hitpulse 1s ease-in-out 3}
 @keyframes hitpulse{0%,100%{box-shadow:0 0 0 2px rgba(0,0,0,.5),0 0 24px rgba(143,227,162,.7)}50%{box-shadow:0 0 0 6px rgba(143,227,162,.25),0 0 40px rgba(143,227,162,.9)}}
+
+/* ---------- 21. Выбор нескольких шагов и удаление списком ---------- */
+.recorded-steps li .step-pick,.step-head .step-pick{width:16px;height:16px;min-height:0;margin:0;padding:0;flex:0 0 auto;accent-color:var(--info);cursor:pointer}
+.recorded-steps li .step-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recorded-steps li.picked{border-color:rgba(127,184,255,.5);background:rgba(127,184,255,.08)}
+.steps-bulk{display:flex;align-items:center;gap:8px;margin-top:8px;padding:8px 10px;border:1px solid rgba(255,122,133,.4);border-radius:var(--r-s);background:var(--rec-dim);font:600 12px var(--font);color:#ffd4d8}
+.steps-bulk[hidden]{display:none}
+.steps-bulk span{flex:1}
+.steps-bulk button,.steps-bulk .btn{min-height:30px;padding:0 10px;border:1px solid rgba(255,122,133,.5);border-radius:7px;background:transparent;color:#ffd4d8;font:700 11.5px var(--font);cursor:pointer}
+.steps-bulk .steps-delete,.steps-bulk #stepsDelete{background:var(--rec);border-color:var(--rec);color:#2a0b0f}
+.steps-bulk .steps-delete:hover,.steps-bulk #stepsDelete:hover{background:#ff8f98}
+.steps-bulk .steps-unpick,.steps-bulk #stepsUnpick{color:var(--txt-2);border-color:var(--line-2)}
+#stepList .steps-bulk{margin:0 0 10px}

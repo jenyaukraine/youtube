@@ -604,10 +604,19 @@ function describeStep(step){
     default: return (ACTION_LABELS[step.action]||step.action)+(q?' '+q:'')+(v?' '+text:'');
   }
 }
+function updateStepsBulk(card){
+  const bar=card.querySelector('.steps-bulk'); if(!bar) return;
+  const n=card._picked?.size||0; bar.hidden=!n;
+  if(n) bar.querySelector('.steps-bulk-t').textContent=`Выбрано: ${n} из ${card._steps?.length||0}`;
+}
 function renderSteps(card){
   const list=card.querySelector('.recorded-steps');
   const from=card._playFrom||0;
-  list.replaceChildren(...(card._steps||[]).map((step,i)=>{ const item=document.createElement('li'); item.dataset.index=i; item.title=i===from&&from?'Повтор начнётся отсюда · нажми, чтобы снять':'Нажми — повторять с этого шага'; item.classList.toggle('from',i===from&&from>0); item.classList.toggle('skipped',i<from); item.textContent=describeStep(step); return item; }));
+  list.replaceChildren(...(card._steps||[]).map((step,i)=>{ const item=document.createElement('li'); item.dataset.index=i; item.title=i===from&&from?'Повтор начнётся отсюда · нажми, чтобы снять':'Нажми — повторять с этого шага'; item.classList.toggle('from',i===from&&from>0); item.classList.toggle('skipped',i<from); item.classList.toggle('picked',!!card._picked?.has(i));
+    const pick=document.createElement('input'); pick.type='checkbox'; pick.className='step-pick'; pick.checked=!!card._picked?.has(i); pick.title='Выбрать шаг'; pick.setAttribute('aria-label',`Выбрать шаг ${i+1}`);
+    const text=document.createElement('span'); text.className='step-text'; text.textContent=describeStep(step);
+    item.append(pick,text); return item; }));
+  updateStepsBulk(card);
   const rb=card.querySelector('.record-replay'); if(rb && !card._replaying) rb.textContent=from>0?`▶ С шага ${from+1}`:'▶ Повторить';
   const count=card._steps?.length||0;
   card.querySelector('.record-status').textContent=card.dataset.recording==='1'
@@ -967,6 +976,22 @@ $('workersPanel').addEventListener('click', async e => {
     toast(r.ok?`Сохранено на сервере: ${name}`:`Сохранено только в этом браузере; сервер: ${r.error||'ошибка'}`,r.ok?'ok':'err');
     return;
   }
+  if(e.target.matches('.recorded-steps .step-pick')){
+    const li=e.target.closest('li'), card=li.closest('.worker'), i=+li.dataset.index;
+    card._picked=card._picked||new Set();
+    if(e.shiftKey && card._lastPick!=null){ const [a,b]=[Math.min(card._lastPick,i),Math.max(card._lastPick,i)]; for(let k=a;k<=b;k++) card._picked.add(k); }
+    else if(e.target.checked) card._picked.add(i); else card._picked.delete(i);
+    card._lastPick=i; renderSteps(card); return;
+  }
+  if(e.target.matches('.steps-delete')){
+    const card=e.target.closest('.worker'), picked=card._picked||new Set(); if(!picked.size) return;
+    card._steps=(card._steps||[]).filter((_,i)=>!picked.has(i));
+    if((card._playFrom||0)>=card._steps.length) card._playFrom=0;
+    card._picked=new Set(); card._lastPick=null;
+    if(card._steps.length) persistDraft(card); else forgetDraft(card);
+    renderSteps(card); toast(`Удалено шагов: ${picked.size}`); return;
+  }
+  if(e.target.matches('.steps-unpick')){ const card=e.target.closest('.worker'); card._picked=new Set(); card._lastPick=null; renderSteps(card); return; }
   if(e.target.closest('.recorded-steps li')){
     const li=e.target.closest('li'), card=li.closest('.worker'), i=+li.dataset.index;
     card._playFrom=(card._playFrom||0)===i?0:i; renderSteps(card);
@@ -1018,7 +1043,7 @@ $('workersPanel').addEventListener('click', async e => {
       e.target.textContent=card.dataset.recording==='1' ? '■ Остановить запись' : '● Записать шаги';
       renderSteps(card);
     }else if(e.target.matches('.record-clear')){
-      forgetDraft(card);card._steps=[]; card._playFrom=0; card._inputVarCount=0; card._recordLastFinishedAt=Date.now(); renderSteps(card);
+      forgetDraft(card);card._steps=[]; card._playFrom=0; card._picked=new Set(); card._inputVarCount=0; card._recordLastFinishedAt=Date.now(); renderSteps(card);
     }else if(e.target.matches('.record-copy')){
       try{ await navigator.clipboard.writeText(JSON.stringify(card._steps||[],null,2)); toast('Шаги скопированы как JSON'); }catch{ toast('Не удалось скопировать','err'); }
       e.target.closest('.recorder-more')?.removeAttribute('open');
@@ -1239,6 +1264,7 @@ function render(data){
             <div class="scenario-progress" hidden><div class="scenario-now"><span class="scenario-now-k"></span><span class="scenario-now-t"></span></div><div class="scenario-action" hidden><span class="scenario-action-t"></span><button type="button" class="scenario-run">▶ Запустить отсюда</button><button type="button" class="scenario-action-x" aria-label="Снять выбор" title="Снять выбор">✕</button></div><div class="scenario-track"><i></i></div><ol class="scenario-steps" aria-label="Шаги сценария"></ol></div>
             <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><div class="repeat-control"><input type="number" class="repeat-count" min="1" max="100" step="1" value="1" aria-label="Сколько раз повторить"><span>раз</span><button type="button" class="record-replay">▶ Повторить</button></div><button type="button" class="record-save">💾 Сохранить</button><select class="macro-pick" aria-label="Открыть сценарий"><option value="">Открыть сценарий…</option></select><details class="recorder-more"><summary title="Ещё">⋯</summary><div class="recorder-menu"><button type="button" class="record-copy">Копировать шаги как JSON</button><button type="button" class="record-unselect">Повторять с начала</button></div></details><button type="button" class="record-clear icon" title="Очистить запись" aria-label="Очистить запись">🗑</button></div><div class="record-status" aria-live="polite"></div>
             <ol class="recorded-steps"></ol>
+            <div class="steps-bulk" hidden><span class="steps-bulk-t"></span><button type="button" class="steps-delete">Удалить выбранные</button><button type="button" class="steps-unpick">Снять выбор</button></div>
             <details class="manual-action"><summary>Ручное действие по селектору · для точной настройки</summary>
             <div class="control-grid">
               <select class="action-type" aria-label="Действие"><option value="click">Кликнуть</option><option value="wait_click">Ждать и кликнуть</option><option value="fill">Ввести текст</option><option value="hover">Навести мышь</option><option value="drag">Перетащить</option><option value="scroll">Прокрутить</option><option value="press">Нажать клавишу</option><option value="navigate">Открыть URL</option><option value="dblclick">Двойной клик</option><option value="type">Печатать по буквам</option><option value="select">Выбрать в списке</option><option value="wait_for">Ждать появления</option><option value="wait_gone">Ждать исчезновения</option><option value="wait">Пауза (мс)</option><option value="text">Прочитать текст</option><option value="screenshot">Скриншот в файлы</option><option value="reload">Перезагрузить</option></select>
