@@ -229,6 +229,33 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
 .preview-tools{position:absolute;left:8px;bottom:8px;display:flex;gap:6px;z-index:2}.preview-tools button{border:1px solid #61758b;border-radius:7px;background:rgba(8,16,25,.88);color:#e8f6ff;padding:7px 9px;font:800 11px 'Manrope',sans-serif;cursor:pointer}.preview-tools button.on{border-color:#a8f278;background:#23442a;color:#e6ffd8}.worker-preview.pick img{cursor:crosshair}.worker-preview:not(.pick) img{cursor:default}.worker-control .recorder{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}.worker-control .recorder button{padding:8px 10px;border:1px solid #465568;border-radius:8px;background:#182230;color:#d7e5f4;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-control .recorder .recording{border-color:#ff8d93;color:#ffb8bc;background:#39222a}.recorded-steps{margin:10px 0 0;padding-left:22px;color:#b9c8d9;font:11px 'Manrope',sans-serif}.recorded-steps li{padding:4px 0}.recorded-steps:empty::before{content:'Пока нет записанных действий';color:#73849a}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.goal{align-items:stretch}.goal .pct{margin-left:0}.wrap{padding:22px 18px 45px}}
 @media(max-width:600px){header{align-items:flex-start}.brand h1{font-size:20px}.brand p{font-size:11px}.logo{width:48px;height:48px}.badge{font-size:10px;padding:9px 10px}.badge .dot{width:8px;height:8px}.goal{padding:24px}.goal .big{font-size:43px}.goal .pct{width:100%}.card{padding:20px}.totals{grid-template-columns:1fr 1fr}.tile:last-child{grid-column:span 2}.worker{flex-wrap:wrap}.worker .act{order:3;text-align:left;flex-basis:100%}}
+
+/* automation: triggers, macros, files */
+.auto-card{margin-top:20px}
+.auto-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.auto-head h2{margin-bottom:0}
+.token-box{display:flex;align-items:center;gap:8px}
+.token-box input{width:220px;padding:9px 11px;border:1px solid #455267;border-radius:9px;background:#0c121c;color:#e3eef8;font:12px 'JetBrains Mono',monospace}
+.token-box small{font-size:11px;color:var(--txt3)}
+.auto-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media(max-width:900px){.auto-grid{grid-template-columns:1fr}}
+.auto-col h3{font-size:13px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.auto-col h3 button{padding:5px 9px;border:1px solid #465568;border-radius:7px;background:#182230;color:#d7e5f4;font:700 11px 'Manrope',sans-serif;cursor:pointer}
+.auto-list{display:flex;flex-direction:column;gap:7px;min-height:40px}
+.auto-list:empty::before{content:attr(data-empty);font-size:12px;color:var(--txt3)}
+.auto-item{border:1px solid #334050;border-radius:10px;padding:9px 11px;background:#0f141d;font-size:12px;display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}
+.auto-item b{color:#dfffd1;font-weight:800}
+.auto-item .meta{grid-column:1;color:#8192a8;font:11px 'JetBrains Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.auto-item .ops{grid-row:1/span 2;display:flex;gap:5px}
+.auto-item .ops button,.auto-item .ops a{padding:5px 8px;border:1px solid #465568;border-radius:7px;background:#182230;color:#d7e5f4;font:700 11px 'Manrope',sans-serif;cursor:pointer;text-decoration:none}
+.auto-item .ops button.off{opacity:.5}
+.auto-item .ops button.danger:hover{border-color:var(--red);color:var(--red)}
+.auto-form{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid #334050}
+.auto-form select,.auto-form input,.auto-form textarea{min-width:0;width:100%;padding:9px 11px;border:1px solid #455267;border-radius:9px;background:#0c121c;color:#e3eef8;font:12px 'Manrope',sans-serif}
+.auto-form textarea{grid-column:1/-1;min-height:64px;font:11px 'JetBrains Mono',monospace;resize:vertical}
+.auto-form .wide{grid-column:1/-1}
+.auto-form button{grid-column:1/-1;padding:10px;border:1px solid #8bcf6d;border-radius:9px;background:#263b29;color:#dfffd1;font:800 12px 'Manrope',sans-serif;cursor:pointer}
+.macro-pick{padding:8px 10px;border:1px solid #465568;border-radius:8px;background:#182230;color:#d7e5f4;font:700 11px 'Manrope',sans-serif}
 </style>
 </head>
 <body>
@@ -344,7 +371,36 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
 
   <div class="log" id="logBox"></div>
 
-  <footer>Katya <b>Browser Lab</b> · Playwright Chromium · <span id="uptime">0</span> с открыто</footer>
+  <section class="card auto-card" id="autoCard">
+  <div class="auto-head">
+    <h2>Автоматизация · триггеры, макросы, файлы</h2>
+    <div class="token-box"><input type="password" id="apiToken" placeholder="API-ключ (data/api_token.txt)" autocomplete="off"><small>нужен для сохранения</small></div>
+  </div>
+  <div class="auto-grid">
+    <div class="auto-col">
+      <h3>Триггеры <span class="hint">когда появится → сделать</span></h3>
+      <div class="auto-list" id="triggerList" data-empty="Пока нет триггеров. Пример: когда виден текст «Принять все» → кликнуть по нему."></div>
+      <form class="auto-form" id="triggerForm">
+        <input type="text" id="trName" placeholder="Название" class="wide" required maxlength="80">
+        <select id="trKind"><option value="text">Виден текст</option><option value="css">Виден CSS</option><option value="role:button">Видна кнопка</option><option value="role:link">Видна ссылка</option><option value="label">Виден label</option><option value="url">URL совпадает (regex)</option></select>
+        <input type="text" id="trQuery" placeholder="Что искать" required maxlength="300">
+        <select id="trThen" class="wide"><option value="click">Кликнуть по найденному элементу</option><option value="press:Escape">Нажать Escape</option><option value="reload">Перезагрузить страницу</option><option value="screenshot">Сделать скриншот в файлы</option><option value="steps">Свои шаги (JSON ниже)</option></select>
+        <textarea id="trSteps" placeholder='[{"action":"click","kind":"text","query":"Принять все"}]' hidden></textarea>
+        <button type="submit">Добавить триггер</button>
+      </form>
+    </div>
+    <div class="auto-col">
+      <h3>Макросы <button type="button" id="macroReload">Обновить</button></h3>
+      <div class="auto-list" id="macroList" data-empty="Запиши шаги во вкладке и нажми «Сохранить макрос»."></div>
+      <p class="hint">Макрос запускается во вкладке через меню «▶ Макрос» в карточке вкладки. Агенты через MCP могут вызывать те же макросы.</p>
+    </div>
+    <div class="auto-col">
+      <h3>Файлы <button type="button" id="fileReload">Обновить</button></h3>
+      <div class="auto-list" id="fileList" data-empty="Скриншоты (шаг screenshot) и загрузки браузера появятся здесь."></div>
+    </div>
+  </div>
+</section>
+<footer>Katya <b>Browser Lab</b> · Playwright Chromium · <span id="uptime">0</span> с открыто</footer>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -406,13 +462,13 @@ $('btnStop').onclick = stopAll;
 $('url').addEventListener('keydown', e => { if(e.key==='Enter') start(); });
 function updateActionFields(card){
   const action = card.querySelector('.action-type').value;
-  const needsElement = ['click','wait_click','fill','hover','drag'].includes(action);
-  const needsValue = ['fill','drag','scroll','press','navigate'].includes(action);
+  const needsElement = ['click','wait_click','dblclick','fill','type','hover','drag','select','wait_for','wait_gone','text'].includes(action);
+  const needsValue = ['fill','type','drag','scroll','press','navigate','select','wait','screenshot'].includes(action);
   card.querySelector('.action-kind').hidden = !needsElement;
   card.querySelector('.action-query').hidden = !needsElement;
   card.querySelector('.action-value').hidden = !needsValue;
   card.querySelector('.action-query').placeholder = 'Элемент: CSS, текст, роль или label';
-  card.querySelector('.action-value').placeholder = ({fill:'Текст для ввода',drag:'Цель перетаскивания (тем же способом поиска)',scroll:'Прокрутка в пикселях, например 500',press:'Клавиша, например Enter или Escape',navigate:'https://example.com'})[action] || '';
+  card.querySelector('.action-value').placeholder = ({fill:'Текст для ввода',drag:'Цель перетаскивания (тем же способом поиска)',scroll:'Прокрутка в пикселях, например 500',press:'Клавиша, например Enter или Escape',navigate:'https://example.com',type:'Текст, печатается по буквам',select:'Значение option',wait:'Миллисекунды, например 1500',screenshot:'Имя файла (пусто = shot) или full'})[action] || '';
   card.querySelector('.control-help').textContent = action === 'wait_click' ? 'Ждёт появления элемента до 2 минут и нажимает один раз.' : action === 'click' ? 'Можно также нажать прямо на скриншот. Для точного выбора укажи CSS, текст, роль или label.' : 'Действие выполняется только в этой вкладке. После него кадр обновится.';
 }
 
@@ -423,13 +479,14 @@ function renderSteps(card){
 async function runAction(card, payload, options={}){
   const button = card.querySelector('.worker-stop');
   const job = button.dataset.job, worker = button.dataset.worker;
-  const control_token = sessionStorage.getItem('katya_control_' + job);
-  if(!control_token){ toast('Управление доступно для вкладок, открытых в этой сессии','err'); return null; }
+  const control_token = sessionStorage.getItem('katya_control_' + job) || '';
+  if(!control_token && !apiToken()){ toast('Управление доступно для вкладок, открытых в этой сессии, или введи API-ключ','err'); return null; }
   const run = card.querySelector('.worker-action-run');
   run.disabled = true;
   try{
+    const headers = {'Content-Type':'application/json'}; if(apiToken()) headers['X-Katya-Token'] = apiToken();
     const r = await fetch(`/api/worker/${encodeURIComponent(job)}/${encodeURIComponent(worker)}/action`,{
-      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,control_token})
+      method:'POST',headers,body:JSON.stringify({...payload,control_token})
     });
     const data = await r.json();
     if(!options.quiet) toast(data.ok ? (payload.action==='inspect' ? 'Элемент выбран' : 'Действие выполнено') : (data.error || 'Действие не выполнено'),data.ok ? 'ok' : 'err');
@@ -442,8 +499,16 @@ async function runAction(card, payload, options={}){
   finally{ run.disabled = false; }
 }
 
-$('workersPanel').addEventListener('change', e => {
+$('workersPanel').addEventListener('change', async e => {
   if(e.target.matches('.action-type')) updateActionFields(e.target.closest('.worker'));
+  if(e.target.matches('.macro-pick') && e.target.value){
+    const card=e.target.closest('.worker'), name=e.target.value; e.target.value='';
+    const button=card.querySelector('.worker-stop'), job=button.dataset.job, worker=button.dataset.worker;
+    const control_token=sessionStorage.getItem('katya_control_'+job)||'';
+    const r=await apiFetch(`/api/macros/${encodeURIComponent(name)}/run`,{method:'POST',body:JSON.stringify({job_id:job,worker_id:worker,control_token})});
+    toast(r.ok ? `Макрос выполнен: ${r.completed} шагов` : (r.error||`Остановлено на шаге ${(r.completed||0)+1}`), r.ok?'ok':'err');
+    loadShot(card,true);
+  }
 });
 $('workersPanel').addEventListener('click', async e => {
   if(e.target.matches('.preview-click,.preview-pick')){
@@ -469,8 +534,15 @@ $('workersPanel').addEventListener('click', async e => {
     }
     return;
   }
-  if(e.target.matches('.record-toggle,.record-replay,.record-copy,.record-clear')){
+  if(e.target.matches('.record-toggle,.record-replay,.record-copy,.record-clear,.record-save')){
     const card=e.target.closest('.worker');
+    if(e.target.matches('.record-save')){
+        const steps=card._steps||[]; if(!steps.length){ toast('Сначала запиши шаги','err'); return; }
+        const name=prompt('Название макроса'); if(!name) return;
+        const r=await apiFetch('/api/macros',{method:'POST',body:JSON.stringify({name,steps})});
+        toast(r.ok ? 'Макрос сохранён' : (r.error||'Не удалось сохранить'), r.ok?'ok':'err'); if(r.ok) loadMacros();
+      return;
+    }
     if(e.target.matches('.record-toggle')){
       card.dataset.recording=card.dataset.recording==='1' ? '0' : '1';
       e.target.classList.toggle('recording',card.dataset.recording==='1');
@@ -564,6 +636,7 @@ function renderSystem(system){
 
 function render(data){
   renderSystem(data.system);
+  renderTriggers(data.triggers);
   const jobs = data.jobs || [];
   const active = jobs.filter(j=>j.status==='running');
   let total = 0, errs = 0, anyRunning = false;
@@ -608,13 +681,13 @@ function render(data){
           <div class="worker-url"></div>
           <details class="worker-control"><summary>Управление вкладкой · клик / ввод / перетаскивание</summary>
             <div class="control-grid">
-              <select class="action-type" aria-label="Действие"><option value="click">Кликнуть</option><option value="wait_click">Ждать и кликнуть</option><option value="fill">Ввести текст</option><option value="hover">Навести мышь</option><option value="drag">Перетащить</option><option value="scroll">Прокрутить</option><option value="press">Нажать клавишу</option><option value="navigate">Открыть URL</option></select>
-              <select class="action-kind" aria-label="Найти элемент"><option value="css">CSS selector</option><option value="text">Текст</option><option value="label">Label</option><option value="role:button">Роль: кнопка</option><option value="role:link">Роль: ссылка</option><option value="role:textbox">Роль: поле ввода</option><option value="role:checkbox">Роль: checkbox</option></select>
+              <select class="action-type" aria-label="Действие"><option value="click">Кликнуть</option><option value="wait_click">Ждать и кликнуть</option><option value="fill">Ввести текст</option><option value="hover">Навести мышь</option><option value="drag">Перетащить</option><option value="scroll">Прокрутить</option><option value="press">Нажать клавишу</option><option value="navigate">Открыть URL</option><option value="dblclick">Двойной клик</option><option value="type">Печатать по буквам</option><option value="select">Выбрать в списке</option><option value="wait_for">Ждать появления</option><option value="wait_gone">Ждать исчезновения</option><option value="wait">Пауза (мс)</option><option value="text">Прочитать текст</option><option value="screenshot">Скриншот в файлы</option><option value="reload">Перезагрузить</option></select>
+              <select class="action-kind" aria-label="Найти элемент"><option value="css">CSS selector</option><option value="text">Текст</option><option value="label">Label</option><option value="role:button">Роль: кнопка</option><option value="role:link">Роль: ссылка</option><option value="role:textbox">Роль: поле ввода</option><option value="role:checkbox">Роль: checkbox</option><option value="placeholder">Placeholder</option><option value="xpath">XPath</option></select>
               <input class="action-query" placeholder="Элемент: CSS, текст, роль или label" aria-label="Элемент">
               <input class="action-value" placeholder="Значение" aria-label="Значение" hidden>
             </div>
             <div class="control-help"></div><button type="button" class="worker-action-run">Выполнить действие</button>
-            <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><button type="button" class="record-replay">▶ Повторить</button><button type="button" class="record-copy">Копировать шаги</button><button type="button" class="record-clear">Очистить</button></div>
+            <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><button type="button" class="record-replay">▶ Повторить</button><button type="button" class="record-copy">Копировать шаги</button><button type="button" class="record-clear">Очистить</button><button type="button" class="record-save">💾 Сохранить макрос</button><select class="macro-pick" aria-label="Запустить макрос"><option value="">▶ Макрос…</option></select></div>
             <ol class="recorded-steps"></ol>
           </details>`;
         const img = card.querySelector('img');
@@ -624,6 +697,7 @@ function render(data){
         updateActionFields(card);
         card._steps=[];
         renderSteps(card);
+        fillMacroPick(card.querySelector('.macro-pick'));
       }
       card.querySelector('.st').className = 'st ' + w.state;
       card.querySelector('.name').textContent = 'W-' + w.id.split('-').pop();
@@ -641,6 +715,70 @@ function render(data){
   box.innerHTML = (data.log||[]).map(l => `<div class="l">${l.replace(/</g,'&lt;')}</div>`).join('');
   box.scrollTop = box.scrollHeight;
 }
+
+// ---- automation: API token, triggers, macros, files ----
+const tokenInput=$('apiToken');
+try{ tokenInput.value=localStorage.getItem('katya_token')||''; }catch{}
+tokenInput.addEventListener('change',()=>{ try{ localStorage.setItem('katya_token',tokenInput.value.trim()); }catch{}; loadMacros(); loadFiles(); });
+function apiToken(){ return tokenInput.value.trim(); }
+async function apiFetch(url,options={}){
+  const headers={'Content-Type':'application/json',...(options.headers||{})};
+  if(apiToken()) headers['X-Katya-Token']=apiToken();
+  try{ const r=await fetch(url,{...options,headers}); return await r.json(); }
+  catch(e){ return {ok:false,error:'Нет связи: '+e.message}; }
+}
+let MACROS=[];
+function describeStep(step){ return `${step.action}${step.query?' '+step.query:''}${step.value?' = '+step.value:''}`; }
+async function loadMacros(){
+  const r=await apiFetch('/api/macros'); MACROS=r.macros||[];
+  $('macroList').replaceChildren(...MACROS.map(m=>{ const item=document.createElement('div'); item.className='auto-item';
+    item.innerHTML=`<b></b><span class="meta"></span><span class="ops"><button type="button" class="copy">JSON</button><button type="button" class="danger">✕</button></span>`;
+    item.querySelector('b').textContent=m.name; item.querySelector('.meta').textContent=`${m.steps.length} шагов: `+m.steps.slice(0,3).map(describeStep).join(' → ');
+    item.querySelector('.copy').onclick=async()=>{ try{ await navigator.clipboard.writeText(JSON.stringify(m.steps,null,2)); toast('JSON скопирован'); }catch{ toast('Не удалось скопировать','err'); } };
+    item.querySelector('.danger').onclick=async()=>{ if(!confirm(`Удалить макрос «${m.name}»?`)) return; const d=await apiFetch(`/api/macros/${encodeURIComponent(m.name)}`,{method:'DELETE'}); toast(d.ok?'Удалено':(d.error||'Ошибка'),d.ok?'ok':'err'); loadMacros(); };
+    return item; }));
+  document.querySelectorAll('.macro-pick').forEach(fillMacroPick);
+}
+function fillMacroPick(select){ const current=select.value; select.replaceChildren(new Option('▶ Макрос…',''),...MACROS.map(m=>new Option(m.name,m.name))); select.value=current; }
+async function loadFiles(){
+  if(!apiToken()){ $('fileList').replaceChildren(); $('fileList').dataset.empty='Введи API-ключ, чтобы видеть файлы.'; return; }
+  const r=await apiFetch('/api/files'); if(!r.ok){ $('fileList').replaceChildren(); $('fileList').dataset.empty=r.error||'Ошибка'; return; }
+  $('fileList').dataset.empty='Скриншоты (шаг screenshot) и загрузки браузера появятся здесь.';
+  $('fileList').replaceChildren(...(r.files||[]).slice(-30).reverse().map(f=>{ const item=document.createElement('div'); item.className='auto-item';
+    item.innerHTML=`<b></b><span class="meta"></span><span class="ops"><a target="_blank" rel="noopener">Открыть</a><button type="button" class="danger">✕</button></span>`;
+    item.querySelector('b').textContent=f.name; item.querySelector('.meta').textContent=`${(f.size/1024).toFixed(1)} КБ · ${new Date(f.modified*1000).toLocaleString('ru-RU')}`;
+    item.querySelector('a').href=`/api/files/${encodeURIComponent(f.name)}?token=${encodeURIComponent(apiToken())}`;
+    item.querySelector('.danger').onclick=async()=>{ const d=await apiFetch(`/api/files/${encodeURIComponent(f.name)}`,{method:'DELETE'}); toast(d.ok?'Файл удалён':(d.error||'Ошибка'),d.ok?'ok':'err'); loadFiles(); };
+    return item; }));
+}
+let lastTriggersJson='';
+function renderTriggers(triggers){
+  const json=JSON.stringify(triggers||[]); if(json===lastTriggersJson) return; lastTriggersJson=json;
+  $('triggerList').replaceChildren(...(triggers||[]).map(t=>{ const item=document.createElement('div'); item.className='auto-item';
+    item.innerHTML=`<b></b><span class="meta"></span><span class="ops"><button type="button" class="toggle"></button><button type="button" class="danger">✕</button></span>`;
+    item.querySelector('b').textContent=`${t.name} · сработал ${t.fired}×`;
+    item.querySelector('.meta').textContent=`${t.when.kind}: ${t.when.query} → ${t.then.map(describeStep).join(', ')}`;
+    const toggle=item.querySelector('.toggle'); toggle.textContent=t.enabled?'Вкл':'Выкл'; toggle.classList.toggle('off',!t.enabled);
+    toggle.onclick=async()=>{ const d=await apiFetch(`/api/triggers/${t.id}/enabled?enabled=${!t.enabled}`,{method:'POST'}); if(!d.ok) toast(d.error||'Ошибка','err'); };
+    item.querySelector('.danger').onclick=async()=>{ const d=await apiFetch(`/api/triggers/${t.id}`,{method:'DELETE'}); toast(d.ok?'Триггер удалён':(d.error||'Ошибка'),d.ok?'ok':'err'); };
+    return item; }));
+}
+$('trThen').addEventListener('change',()=>{ $('trSteps').hidden=$('trThen').value!=='steps'; });
+$('triggerForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const kindValue=$('trKind').value, kind=kindValue.startsWith('role:')?'role':kindValue, role=kindValue.startsWith('role:')?kindValue.slice(5):'button';
+  const when={kind,query:$('trQuery').value.trim(),role}; const mode=$('trThen').value; let then;
+  if(mode==='click'){ if(kind==='url'){ toast('Для условия URL выбери другое действие','err'); return; } then=[{action:'click',kind,role,query:when.query,optional:true}]; }
+  else if(mode.startsWith('press:')) then=[{action:'press',value:mode.slice(6)}];
+  else if(mode==='reload') then=[{action:'reload'}];
+  else if(mode==='screenshot') then=[{action:'screenshot',name:$('trName').value.trim()}];
+  else { try{ then=JSON.parse($('trSteps').value); if(!Array.isArray(then)||!then.length) throw Error(); }catch{ toast('Шаги должны быть JSON-массивом','err'); return; } }
+  const r=await apiFetch('/api/triggers',{method:'POST',body:JSON.stringify({name:$('trName').value.trim(),when,then,cooldown_ms:5000})});
+  toast(r.ok?'Триггер добавлен':(r.error||'Не удалось добавить'),r.ok?'ok':'err');
+  if(r.ok){ $('trName').value=''; $('trQuery').value=''; }
+});
+$('macroReload').onclick=loadMacros; $('fileReload').onclick=loadFiles;
+loadMacros(); loadFiles();
 
 function connect(){
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
