@@ -73,6 +73,11 @@ class Worker:
         self.error = ""
         self.started = time.time()
         self.triggers_fired = 0
+        self.scenario_phase = ""
+        self.scenario_completed = 0
+        self.scenario_current = -1
+        self.scenario_total = 0
+        self.scenario_wait_until = 0.0
 
     def snapshot(self):
         return {
@@ -87,6 +92,9 @@ class Worker:
             "error": self.error,
             "uptime": round(time.time() - self.started, 1),
             "triggers_fired": self.triggers_fired,
+            "scenario": {"phase": self.scenario_phase, "completed": self.scenario_completed,
+                         "current": self.scenario_current, "total": self.scenario_total,
+                         "wait_until": self.scenario_wait_until},
         }
 
 class Job:
@@ -132,6 +140,7 @@ class Job:
             "total_watch_hours": round(self.total_watch() / 3600, 3),
             "created": self.created,
             "workers_list": [w.snapshot() for w in self.workers_list],
+            "scenario_steps": [{"action": step.action, "name": step.name} for step in self.steps],
         }
         if with_token:
             data["control_token"] = self.control_token
@@ -257,9 +266,23 @@ async def worker_loop(job: Job, w: Worker, page: Page):
         w.last_action = "Проверяю страницу"
         log(f"worker {w.id} loaded {job.url[:40]} as {w.profile or 'chromium'}")
         if job.steps:
-            w.last_action = f"Сценарий: {len(job.steps)} шагов"
-            result = await run_steps(page, job.steps, delay_ms=300, lock=job.page_lock(w.id),
-                                     screenshot_sink=make_screenshot_sink(w.id))
+            w.scenario_total = len(job.steps)
+            w.scenario_phase = "waiting"
+            w.scenario_wait_until = time.time() + 10
+            w.last_action = "Сценарий начнётся через 10 секунд"
+            await asyncio.sleep(10)
+            w.scenario_wait_until = 0
+            def on_scenario_progress(index, phase, result):
+                w.scenario_current = index
+                w.scenario_phase = phase if phase == "running" else "running"
+                w.scenario_completed = index + 1 if phase == "done" or (phase == "error" and job.steps[index].optional) else index
+                w.last_action = (f"Сценарий: шаг {index + 1}/{w.scenario_total} · {job.steps[index].action}"
+                                 if phase == "running" else
+                                 f"Сценарий: {w.scenario_completed}/{w.scenario_total} шагов")
+            result = await run_steps(page, job.steps, delay_ms=650, lock=job.page_lock(w.id),
+                                     screenshot_sink=make_screenshot_sink(w.id),
+                                     on_progress=on_scenario_progress)
+            w.scenario_phase = "done" if result["ok"] else "error"
             w.last_action = (f"Сценарий выполнен: {result['completed']} шагов" if result["ok"]
                              else f"Сценарий остановлен на шаге {result['completed'] + 1}: {result.get('error', '')[:60]}")
             log(f"worker {w.id} start scenario: {result['completed']}/{len(job.steps)} steps")
@@ -902,7 +925,10 @@ async def ws(websocket: WebSocket):
                 "triggers": TRIGGERS.snapshot(),
             })
             await websocket.send_text(payload)
-            await asyncio.sleep(2)
+            active_scenario = any(w.scenario_phase in ("waiting", "running")
+                                  for job in JOBS.values() if job.status == "running"
+                                  for w in job.workers_list)
+            await asyncio.sleep(0.5 if active_scenario else 2)
     except WebSocketDisconnect:
         pass
     except Exception:

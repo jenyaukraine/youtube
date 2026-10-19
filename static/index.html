@@ -245,6 +245,25 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
 .worker-control .recorder .repeat-control input{width:48px;min-height:28px}
 .scenario-save{max-width:430px}.scenario-save input{min-height:36px;padding:7px 10px}.scenario-save button{padding:7px 11px}
 .record-status{min-height:18px;margin-top:8px;color:#a6b8c8;font:11px 'Manrope',sans-serif}
+.wrap{max-width:1480px}.grid{grid-template-columns:minmax(290px,330px) minmax(0,1fr);gap:16px;align-items:start}
+.grid>.card{padding:20px;border-color:#303b4c;box-shadow:0 14px 40px rgba(0,0,0,.12)}
+.goal{padding:14px 20px;margin-bottom:16px;min-height:105px}.goal .big{font-size:27px}.goal .sub{font-size:11px;max-width:580px}
+.grid>.card:first-child{position:sticky;top:16px}.grid>.card:first-child .hint{line-height:1.4}
+.grid>.card:first-child label{margin-top:16px}.grid>.card:first-child .btn-row{margin-top:22px}
+.worker{gap:10px;padding:0;border:0;background:transparent}.worker+.worker{margin-top:16px;padding-top:16px;border-top:1px solid var(--line2)}
+.worker-preview{border-radius:13px}.worker-meta{gap:9px;font-size:12px}.worker-actions button{padding:8px 10px}
+.worker-control{background:#101722;border:1px solid #354254;border-radius:12px;padding:14px;border-top:1px solid #354254}
+.worker-control>summary{font-size:13px;color:#dce7f2}.worker-control .recorder{gap:7px}
+.worker-control .recorder>button,.worker-control .recorder .repeat-control button{font-size:11px;padding:8px 10px}
+.worker-control .recorder .macro-pick{max-width:230px}
+.scenario-progress{grid-column:1/-1;border:1px solid #3d4c5d;border-radius:12px;background:linear-gradient(120deg,#152233,#111a26);padding:13px 15px}
+.scenario-progress[hidden]{display:none}.scenario-progress-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.scenario-progress-head strong{font-size:12px;color:#e5eff9}.scenario-progress-status{font-size:11px;color:#9fbbd1;text-align:right}
+.scenario-track{height:5px;border-radius:99px;background:#293748;margin-top:10px;overflow:hidden}.scenario-track i{display:block;height:100%;width:0;background:#92d8a4;transition:width .25s}
+.scenario-steps{display:flex;gap:6px;overflow-x:auto;list-style:none;margin-top:11px;padding-bottom:2px;scrollbar-width:thin}
+.scenario-steps li{flex:0 0 auto;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 9px;border-radius:7px;border:1px solid #3d4b5d;color:#8e9eb2;font-size:10px}
+.scenario-steps li.done{border-color:#3c7054;color:#a9e8b8;background:#1c352a}.scenario-steps li.current{border-color:#94caff;color:#e4f4ff;background:#23405b}.scenario-progress.error{border-color:#a76c6c}.scenario-progress.error .scenario-track i{background:#e68f8f}
+@media(max-width:900px){.grid>.card:first-child{position:static}.grid{grid-template-columns:1fr}}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.goal{align-items:stretch}.goal .pct{margin-left:0}.wrap{padding:22px 18px 45px}}
 @media(max-width:600px){header{align-items:flex-start}.brand h1{font-size:20px}.brand p{font-size:11px}.logo{width:48px;height:48px}.badge{font-size:10px;padding:9px 10px}.badge .dot{width:8px;height:8px}.goal{padding:24px}.goal .big{font-size:43px}.goal .pct{width:100%}.card{padding:20px}.totals{grid-template-columns:1fr 1fr}.tile:last-child{grid-column:span 2}.worker{flex-wrap:wrap}.worker .act{order:3;text-align:left;flex-basis:100%}}
 
@@ -536,6 +555,40 @@ function renderSteps(card){
     ? `● Запись идёт · ${count} шагов · действия на снимке сохраняются сразу`
     : count ? `${count} шагов · черновик сохранён в этом браузере` : 'Записываются действия через снимок и панель вкладки.';
 }
+const ACTION_LABELS={scroll:'Прокрутка',point:'Клик',type:'Ввод',press:'Клавиша',click:'Клик',fill:'Заполнение',wait:'Пауза',navigate:'Переход',screenshot:'Снимок',mouse_drag:'Перетаскивание'};
+function renderScenario(card,worker){
+  const pane=card.querySelector('.scenario-progress'),steps=worker._j.scenario_steps||[],status=worker.scenario||{};
+  pane.hidden=!steps.length;
+  if(!steps.length) return;
+  if(card._scenarioId!==worker._j.id){
+    card._scenarioId=worker._j.id;
+    card.querySelector('.scenario-steps').replaceChildren(...steps.map((step,index)=>{
+      const li=document.createElement('li'); li.textContent=`${index+1}. ${step.name||ACTION_LABELS[step.action]||step.action}`; return li;
+    }));
+  }
+  pane.classList.toggle('error',status.phase==='error');
+  card.querySelector('.scenario-track i').style.width=`${Math.max(0,Math.min(100,(status.completed||0)/steps.length*100))}%`;
+  card.querySelectorAll('.scenario-steps li').forEach((li,index)=>{
+    li.classList.toggle('done',index<(status.completed||0));
+    li.classList.toggle('current',status.phase==='running' && index===status.current);
+  });
+  const label=card.querySelector('.scenario-progress-status');
+  if(status.phase==='waiting'){
+    label.dataset.waitUntil=String(status.wait_until||0);
+    updateScenarioCountdown(label);
+  } else {
+    delete label.dataset.waitUntil;
+    label.textContent=!status.phase?'Открывается страница':status.phase==='done'?'Готово · '+steps.length+'/'+steps.length:
+      status.phase==='error'?`Ошибка на шаге ${(status.current||0)+1}`:
+      `Выполняется · ${status.completed||0}/${steps.length}`;
+  }
+}
+function updateScenarioCountdown(label){
+  if(!label.dataset.waitUntil) return;
+  const remaining=Math.max(0,Math.ceil(Number(label.dataset.waitUntil)-Date.now()/1000));
+  label.textContent=`Старт через ${remaining} с · 0/${label.closest('.worker').querySelectorAll('.scenario-steps li').length}`;
+}
+setInterval(()=>document.querySelectorAll('.scenario-progress-status[data-wait-until]').forEach(updateScenarioCountdown),500);
 const DRAFT_STORE='katya_recording_drafts_v1';
 const SCENARIO_STORE='katya_scenarios_v1';
 function localList(key){try{const data=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(data)?data:[];}catch{return [];}}
@@ -1011,7 +1064,8 @@ function render(data){
       if(!card){
         card = document.createElement('div');
         card.className = 'worker'; card.dataset.id = w.id;
-        card.innerHTML = `<div class="worker-preview" tabindex="0"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми, выдели или прокрути" draggable="false" hidden><textarea class="preview-key-capture" aria-label="Клавиатура вкладки" autocomplete="off"></textarea><div class="preview-tools"><button type="button" class="preview-pick">⌕ Выбрать элемент</button></div><button type="button" class="preview-expand">⛶ Развернуть</button><span class="shot-time">Ожидаю кадр…</span></div>
+        card.innerHTML = `<div class="scenario-progress" hidden><div class="scenario-progress-head"><strong>Выполнение сценария</strong><span class="scenario-progress-status"></span></div><div class="scenario-track"><i></i></div><ol class="scenario-steps"></ol></div>
+          <div class="worker-preview" tabindex="0"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми, выдели или прокрути" draggable="false" hidden><textarea class="preview-key-capture" aria-label="Клавиатура вкладки" autocomplete="off"></textarea><div class="preview-tools"><button type="button" class="preview-pick">⌕ Выбрать элемент</button></div><button type="button" class="preview-expand">⛶ Развернуть</button><span class="shot-time">Ожидаю кадр…</span></div>
           <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
           <div class="worker-actions"><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
           <div class="worker-url"></div>
@@ -1041,6 +1095,7 @@ function render(data){
       card.querySelector('.act').title = w.error || '';
       card.querySelector('.secs').textContent = (w.watch_seconds/3600).toFixed(3) + ' ч';
       card.querySelector('.worker-url').textContent = w.url || w._j.url;
+      renderScenario(card,w);
       card.dataset.startUrl=w._j.url;
       if(!card._draftRestored){card._draftRestored=true;restoreDraft(card);}
       card.querySelectorAll('.worker-actions button').forEach(button => { button.dataset.job = w._j.id; button.dataset.worker = w.id; });

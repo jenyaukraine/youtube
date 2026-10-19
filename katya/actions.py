@@ -289,17 +289,22 @@ async def run_step(page: Page, step: Step, *, screenshot_sink=None) -> Dict[str,
 
 
 async def run_steps(page: Page, steps: List[Step], *, delay_ms: int = 300,
-                    screenshot_sink=None, lock: Optional[asyncio.Lock] = None) -> Dict[str, Any]:
+                    screenshot_sink=None, lock: Optional[asyncio.Lock] = None,
+                    on_progress=None) -> Dict[str, Any]:
     """Run steps in order. Returns {"ok", "completed", "results"}."""
     results = []
     completed = 0
-    for step in steps:
+    for index, step in enumerate(steps):
+        if on_progress:
+            on_progress(index, "running", None)
         if lock:
             async with lock:
                 result = await run_step(page, step, screenshot_sink=screenshot_sink)
         else:
             result = await run_step(page, step, screenshot_sink=screenshot_sink)
         results.append({"step": step.name or step.action, **result})
+        if on_progress:
+            on_progress(index, "done" if result["ok"] else "error", result)
         if not result["ok"] and not step.optional:
             return {"ok": False, "completed": completed, "results": results, "error": result["error"]}
         completed += 1
