@@ -482,3 +482,17 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var
   .worker-control{padding:13px}.worker-actions button,.worker-control .recorder>button,.preview-tools button,.preview-expand{min-height:40px}
   .tile{min-height:80px}.auto-col{padding:15px}
 }
+
+/* ---------- 18. Единая панель сценария (прогресс + запись) и редактируемый адрес ---------- */
+.scenario-panel{grid-column:1/-1;padding:14px 16px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-m)}
+.scenario-panel .scenario-progress{padding:0;margin-top:8px;background:none;border:0;border-radius:0}
+.scenario-panel .scenario-progress[hidden]{display:none}
+.scenario-panel .scenario-progress-head strong{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--txt-3)}
+.scenario-panel .recorder{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line-2)}
+.scenario-panel .scenario-progress:not([hidden])+.recorder{margin-top:14px}
+.fx-on .scenario-panel{background:rgba(23,28,40,.72)}
+.worker-url{cursor:text;padding:4px 6px;margin:0 -6px;border-radius:6px;transition:background .15s,color .15s}
+.worker-url:hover{background:var(--surface-3);color:var(--txt-2)}
+.worker-url:hover::after{content:'  ✎ изменить';color:var(--txt-3);font:600 10.5px var(--font)}
+.worker-url-edit{grid-column:1/-1;min-height:34px;padding:6px 10px;font:12px var(--mono);border-color:var(--info);box-shadow:0 0 0 3px rgba(127,184,255,.15)}
+.worker-url-edit[hidden]{display:none}

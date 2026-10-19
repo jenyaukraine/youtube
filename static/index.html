@@ -853,6 +853,23 @@ $('workersPanel').addEventListener('pointerup', e => {
   sendPreviewInput(card,{action:'mouse_drag',...origin,end_x:point.x,end_y:point.y});
 });
 
+$('workersPanel').addEventListener('keydown', async e => {
+  if(!e.target.matches('.worker-url-edit')) return;
+  const card=e.target.closest('.worker'), input=e.target, line=card.querySelector('.worker-url');
+  const close=()=>{ input.hidden=true; line.hidden=false; };
+  if(e.key==='Escape'){ e.preventDefault(); close(); return; }
+  if(e.key==='Enter'){
+    e.preventDefault(); const value=input.value.trim(); close();
+    if(!value || value===line.textContent.trim()) return;
+    const target=/^https?:\/\//i.test(value)?value:'https://'+value;
+    line.textContent=target;
+    const r=await runAction(card,{action:'navigate',value:target});
+    if(!r?.ok) line.textContent=card._lastUrl||line.textContent;
+  }
+});
+$('workersPanel').addEventListener('focusout', e => {
+  if(e.target.matches('.worker-url-edit')){ const card=e.target.closest('.worker'); e.target.hidden=true; card.querySelector('.worker-url').hidden=false; }
+});
 $('workersPanel').addEventListener('change', async e => {
   if(e.target.matches('.action-type')) updateActionFields(e.target.closest('.worker'));
   if(e.target.matches('.macro-pick') && e.target.value){
@@ -906,13 +923,15 @@ $('workersPanel').addEventListener('click', async e => {
     const name=`${host||'Сценарий'} · ${card._steps.length} шагов · ${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`;
     const saved=localList(SCENARIO_STORE);
     const id=crypto.randomUUID?.() || String(Date.now());
-    saved.unshift({id,name,startUrl,steps:card._steps,createdAt:new Date().toISOString()});
+    let hdrs={}; try{ hdrs=JSON.parse($('customHeaders').value.trim()||'{}'); if(!hdrs||Array.isArray(hdrs)||typeof hdrs!=='object') hdrs={}; }catch{ hdrs={}; }
+    const settings={headers:hdrs,user_agent_mode:$('uaMode').value};
+    saved.unshift({id,name,startUrl,steps:card._steps,settings,createdAt:new Date().toISOString()});
     try{ localStorage.setItem(SCENARIO_STORE,JSON.stringify(saved.slice(0,50))); }
     catch{ toast('Не удалось сохранить сценарий','err'); return; }
     forgetDraft(card);
     document.querySelectorAll('.macro-pick').forEach(fillMacroPick); fillStartScenario();
     const job=card.querySelector('.worker-stop').dataset.job, control_token=sessionStorage.getItem('katya_control_'+job)||'';
-    const r=await apiFetch('/api/macros',{method:'POST',headers:{'X-Katya-Job':job,'X-Katya-Control-Token':control_token},body:JSON.stringify({name,steps:card._steps,description:startUrl})});
+    const r=await apiFetch('/api/macros',{method:'POST',headers:{'X-Katya-Job':job,'X-Katya-Control-Token':control_token},body:JSON.stringify({name,steps:card._steps,description:startUrl,start_url:startUrl,settings})});
     if(r.ok) loadMacros();
     e.target.textContent=r.ok?'✓ Сохранено':'Сохранить сценарий';
     if(r.ok) setTimeout(()=>{ if(e.target.isConnected) e.target.textContent='💾 Сохранить сценарий'; },2500);
@@ -937,6 +956,11 @@ $('workersPanel').addEventListener('click', async e => {
     card.querySelectorAll('.scenario-steps li').forEach((el,k)=>el.classList.toggle('picked',k===i));
     card.querySelector('.scenario-action-t').textContent=`Шаг ${i+1} из ${steps.length} · ${describeStep(steps[i])}${full?'':' · детали шагов недоступны: открой вкладку из этой панели'}`;
     card.querySelector('.scenario-action').hidden=false;
+    return;
+  }
+  if(e.target.matches('.worker-url')){
+    const card=e.target.closest('.worker'), input=card.querySelector('.worker-url-edit');
+    input.value=e.target.textContent.trim(); e.target.hidden=true; input.hidden=false; input.focus(); input.select();
     return;
   }
   if(e.target.matches('.scenario-run')){
@@ -1173,12 +1197,12 @@ function render(data){
       if(!card){
         card = document.createElement('div');
         card.className = 'worker'; card.dataset.id = w.id;
-        card.innerHTML = `<div class="scenario-progress" hidden><div class="scenario-progress-head"><strong>Сценарий</strong><span class="scenario-progress-status"></span></div><div class="scenario-now"><span class="scenario-now-k"></span><span class="scenario-now-t"></span></div><div class="scenario-action" hidden><span class="scenario-action-t"></span><button type="button" class="scenario-run">▶ Запустить отсюда</button><button type="button" class="scenario-action-x" aria-label="Снять выбор" title="Снять выбор">✕</button></div><div class="scenario-track"><i></i></div><ol class="scenario-steps" aria-label="Шаги сценария"></ol></div>
-          <div class="worker-preview" tabindex="0"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми, выдели или прокрути" draggable="false" hidden><textarea class="preview-key-capture" aria-label="Клавиатура вкладки" autocomplete="off"></textarea><div class="preview-tools"><button type="button" class="preview-pick">⌕ Выбрать элемент</button></div><button type="button" class="preview-expand">⛶ Развернуть</button><span class="shot-time">Ожидаю кадр…</span></div>
+        card.innerHTML = `<div class="worker-preview" tabindex="0"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми, выдели или прокрути" draggable="false" hidden><textarea class="preview-key-capture" aria-label="Клавиатура вкладки" autocomplete="off"></textarea><div class="preview-tools"><button type="button" class="preview-pick">⌕ Выбрать элемент</button></div><button type="button" class="preview-expand">⛶ Развернуть</button><span class="shot-time">Ожидаю кадр…</span></div>
           <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
           <div class="worker-actions"><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
-          <div class="worker-url"></div>
-          <details class="worker-control" open><summary>Запись шагов и сценарии</summary>
+          <div class="worker-url" title="Нажми, чтобы изменить адрес вкладки"></div><input class="worker-url-edit" type="url" hidden spellcheck="false" autocomplete="off" aria-label="Новый адрес вкладки" placeholder="https://">
+          <section class="scenario-panel worker-control"><div class="scenario-progress-head"><strong>Сценарий</strong><span class="scenario-progress-status"></span></div>
+            <div class="scenario-progress" hidden><div class="scenario-now"><span class="scenario-now-k"></span><span class="scenario-now-t"></span></div><div class="scenario-action" hidden><span class="scenario-action-t"></span><button type="button" class="scenario-run">▶ Запустить отсюда</button><button type="button" class="scenario-action-x" aria-label="Снять выбор" title="Снять выбор">✕</button></div><div class="scenario-track"><i></i></div><ol class="scenario-steps" aria-label="Шаги сценария"></ol></div>
             <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><div class="repeat-control"><input type="number" class="repeat-count" min="1" max="100" step="1" value="1" aria-label="Сколько раз повторить"><span>раз</span><button type="button" class="record-replay">▶ Повторить</button></div><button type="button" class="record-save">💾 Сохранить</button><select class="macro-pick" aria-label="Открыть сценарий"><option value="">Открыть сценарий…</option></select><details class="recorder-more"><summary title="Ещё">⋯</summary><div class="recorder-menu"><button type="button" class="record-copy">Копировать шаги как JSON</button><button type="button" class="record-unselect">Повторять с начала</button></div></details><button type="button" class="record-clear icon" title="Очистить запись" aria-label="Очистить запись">🗑</button></div><div class="record-status" aria-live="polite"></div>
             <ol class="recorded-steps"></ol>
             <details class="manual-action"><summary>Ручное действие по селектору · для точной настройки</summary>
@@ -1190,7 +1214,7 @@ function render(data){
             </div>
             <div class="control-help"></div><button type="button" class="worker-action-run">Выполнить действие</button>
             </details>
-          </details>`;
+          </section>`;
         const img = card.querySelector('img');
         panel.append(card);
         updateActionFields(card);
@@ -1203,7 +1227,7 @@ function render(data){
       card.querySelector('.act').textContent = w.state === 'error' && w.error ? w.error.slice(0, 110) : (w.last_action || w.state);
       card.querySelector('.act').title = w.error || '';
       card.querySelector('.secs').textContent = (w.watch_seconds/3600).toFixed(3) + ' ч';
-      card.querySelector('.worker-url').textContent = w.url || w._j.url;
+      card._lastUrl = w.url || w._j.url; if(!card.querySelector('.worker-url').hidden) card.querySelector('.worker-url').textContent = card._lastUrl;
       renderScenario(card,w);
       card.dataset.startUrl=w._j.url;
       if(!card._draftRestored){card._draftRestored=true;restoreDraft(card);}
@@ -1223,8 +1247,14 @@ const tokenInput=$('apiToken');
 try{ tokenInput.value=localStorage.getItem('katya_token')||''; }catch{}
 tokenInput.addEventListener('change',()=>{ try{ localStorage.setItem('katya_token',tokenInput.value.trim()); }catch{}; loadMacros(); loadFiles(); });
 function apiToken(){ return tokenInput.value.trim(); }
+function tabAuthHeaders(){
+  const open=[...document.querySelectorAll('.worker-stop')].map(b=>b.dataset.job);
+  const job=(curJob && open.includes(curJob))?curJob:open.find(id=>sessionStorage.getItem('katya_control_'+id));
+  const tok=job?sessionStorage.getItem('katya_control_'+job):'';
+  return job&&tok?{'X-Katya-Job':job,'X-Katya-Control-Token':tok}:{};
+}
 async function apiFetch(url,options={}){
-  const headers={'Content-Type':'application/json',...(options.headers||{})};
+  const headers={'Content-Type':'application/json',...tabAuthHeaders(),...(options.headers||{})};
   if(apiToken()) headers['X-Katya-Token']=apiToken();
   try{ const r=await fetch(url,{...options,headers}); return await r.json(); }
   catch(e){ return {ok:false,error:'Нет связи: '+e.message}; }
@@ -1241,9 +1271,21 @@ async function loadMacros(){
     return item; }));
   document.querySelectorAll('.macro-pick').forEach(fillMacroPick); fillStartScenario();
 }
+function startSource(){
+  const choice=$('startScenario').value; if(!choice) return null;
+  return choice.startsWith('scenario:')?localList(SCENARIO_STORE).find(s=>s.id===choice.slice(9)):MACROS.find(m=>m.name===choice.slice(6));
+}
+function applyScenarioSettings(){
+  const src=startSource(); if(!src) return;
+  const st=src.settings||{}; const applied=[];
+  if(st.headers && Object.keys(st.headers).length){ $('customHeaders').value=JSON.stringify(st.headers,null,1); applied.push('заголовки'); }
+  if(st.user_agent_mode && $('uaMode').querySelector(`option[value="${st.user_agent_mode}"]`)){ $('uaMode').value=st.user_agent_mode; applied.push('профиль браузера'); }
+  const url=src.startUrl||src.start_url||''; if(url && /^https?:/.test(url)){ $('url').value=url; applied.push('адрес'); }
+  if(applied.length) toast('Из сценария: '+applied.join(', '));
+}
+$('startScenario').addEventListener('change',applyScenarioSettings);
 function startSteps(){
-  const choice=$('startScenario').value; if(!choice) return [];
-  const source=choice.startsWith('scenario:')?localList(SCENARIO_STORE).find(s=>s.id===choice.slice(9)):MACROS.find(m=>m.name===choice.slice(6));
+  const source=startSource();
   return (source?.steps||[]).map(({action,kind,query,role,value,replace,x,y,end_x,end_y,nth,timeout_ms,optional,name})=>({action,kind,query,role,value,replace,x,y,end_x,end_y,nth,timeout_ms,optional,name}));
 }
 function fillStartScenario(){
