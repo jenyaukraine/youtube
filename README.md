@@ -273,7 +273,7 @@ pnpm build      # tsc + vite -> static/app
 | `katya/runner.py` | запуск сценария в своём Chromium без сервера |
 | `katya/cli.py`, `Katya-Run.bat` | командная строка: run, validate, export-macros, import |
 | `examples/` | примеры сценариев с описанием |
-| `tests/` | тесты: `python tests/test_cli.py`, `python tests/test_extension_flow.py` |
+| `tests/` | тесты без pytest: `python tests/test_cli.py`, `test_history.py`, `test_scheduler.py`, `test_extension_flow.py` |
 | `katya/mcp_server.py` | MCP-мост для агентов |
 | `static/index.html` | панель (разметка и логика) |
 | `static/scenarios.html` | редактор сценариев |
