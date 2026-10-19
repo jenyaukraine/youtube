@@ -325,6 +325,7 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
 </style>
 <link rel="stylesheet" href="/katya.css">
 <script src="/katya-fx.js" defer></script>
+<script src="/browser-core.js"></script>
 <script src="/chrome-panel.js" defer></script>
 </head>
 <body>
@@ -369,10 +370,12 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
       <div class="hint">Любой полный http:// или https:// URL. Для YouTube можно вставить и короткую ссылку.</div>
 
       <label for="launchMethod">Способ запуска</label>
-      <select id="launchMethod" aria-label="Способ запуска"><option value="playwright">Playwright · серверный браузер</option><option value="chrome">Мой Chrome · расширение</option></select>
+      <select id="launchMethod" class="method-source" aria-label="Способ запуска"><option value="playwright">Playwright · серверный браузер</option><option value="chrome">Мой Chrome · расширение</option></select>
+      <div class="method-switch" role="group" aria-label="Способ запуска"><button type="button" data-method="playwright" aria-pressed="true"><span>◈</span><b>Playwright</b><small>На сервере</small></button><button type="button" data-method="chrome" aria-pressed="false"><span>◎</span><b>Мой Chrome</b><small>В этом браузере</small></button></div>
       <div id="chromeSetup" hidden>
         <div class="chrome-connection"><span id="bridgeStatus">Проверяю расширение…</span><span id="connectedTab">Вкладка не подключена</span></div>
-        <details class="chrome-install"><summary>Установка расширения</summary><ol><li><a href="/Katya-Browser-Bridge.zip" download>Скачать ZIP расширения ↗</a> и распаковать.</li><li>Открыть <code>chrome://extensions</code>, включить режим разработчика и загрузить распакованную папку.</li><li>Войти в аккаунт вручную, открыть вкладку и нажать значок расширения → «Подключить эту вкладку».</li></ol></details>
+        <details class="chrome-existing" id="chromeTabPicker"><summary>Подключить открытую вкладку</summary><div id="chromeTabList">Ищу вкладки…</div></details>
+        <details class="chrome-install"><summary>Установка и обновление расширения</summary><ol><li><a href="/Katya-Browser-Bridge.zip" download>Скачать ZIP расширения ↗</a> и распаковать.</li><li>Открыть <code>chrome://extensions</code>, включить режим разработчика и загрузить распакованную папку. Если расширение уже установлено, заменить файлы в его папке и нажать «Обновить».</li><li>Войти в аккаунт вручную, открыть вкладку и нажать значок расширения → «Подключить эту вкладку».</li></ol></details>
         <div class="chrome-repeat"><label for="chromeRepeat">Повторов сценария</label><input type="number" id="chromeRepeat" min="1" max="50" value="1"></div>
       </div>
       <div class="server-only">
@@ -414,12 +417,17 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
     <div class="card">
       <h2>Вкладки ♡</h2>
       <div id="chromeWorkspace" hidden>
-        <div class="chrome-toolbar"><span class="chrome-mode-label">ВАШ CHROME <span class="chrome-heart">♡</span></span><div><button type="button" id="chromeShot">Снимок</button><button type="button" id="chromeDetach">Отключить</button></div></div>
-        <div class="chrome-shot"><img id="chromeShotImage" alt="Снимок вкладки Chrome" hidden><div id="chromeShotEmpty">Подключите вкладку через значок расширения или нажмите «Запустить».</div></div>
-        <div class="chrome-run-state" id="chromeRunState" aria-live="polite">Готово к работе</div>
-        <div class="chrome-steps-head"><strong>Шаги сценария</strong><span id="chromeStepCount">0 шагов</span></div><ol class="chrome-steps" id="chromeStepList"></ol>
+        <div class="chrome-toolbar"><span class="chrome-mode-label">● ЖИВАЯ ВКЛАДКА CHROME <span class="chrome-heart">♡</span></span><div><span class="chrome-input-hint">Клик · колесо · ввод прямо в кадре</span><button type="button" id="chromeDetach">Отключить</button></div></div>
+        <div class="chrome-media-state" id="chromeMediaState" hidden></div>
+        <div class="chrome-shot empty" id="chromeShotFrame" tabindex="0" aria-label="Управление подключённой вкладкой Chrome"><img id="chromeShotImage" alt="Живой кадр вкладки Chrome" draggable="false" hidden><div id="chromeShotEmpty">Введите адрес слева и нажмите «Открыть в Chrome»</div></div>
+        <div class="chrome-video-controls" id="chromeVideoControls" hidden><button type="button" id="chromeVideoPlay" aria-label="Воспроизвести или поставить на паузу">▶</button><button type="button" id="chromeVideoBack" aria-label="На 10 секунд назад">−10</button><input type="range" id="chromeVideoSeek" min="0" max="100" value="0" aria-label="Перемотка видео"><button type="button" id="chromeVideoForward" aria-label="На 10 секунд вперёд">+10</button><span id="chromeVideoTime">0:00 / 0:00</span></div>
+        <div class="chrome-scenario-summary" id="chromeScenarioSummary" hidden><div class="scenario-progress-head"><strong>Сценарий</strong><span id="chromeScenarioStatus">Готов к запуску</span></div><div class="scenario-now"><span class="scenario-now-k" id="chromeScenarioNow">Выбери шаг или запусти с начала</span></div><div class="scenario-track"><i id="chromeScenarioTrack"></i></div></div>
+        <div class="chrome-run-state" id="chromeRunState" aria-live="polite" hidden></div>
+        <div class="chrome-steps-head"><strong>Действия сценария</strong><span id="chromeStepCount">0 шагов</span></div><ol class="chrome-steps action-timeline" id="chromeStepList"></ol>
+        <div class="chrome-step-actions" id="chromeStepActions" hidden><span id="chromeSelectedStep"></span><button type="button" id="chromeRunFrom">▶ Запустить отсюда</button><button type="button" id="chromeClearStep" aria-label="Снять выбор шага">✕</button></div>
         <div class="chrome-recorder"><button type="button" id="chromeRecord">● Записать шаги</button><button type="button" id="chromeFinish" disabled>■ Закончить</button><span id="chromeEventCount">0 действий</span></div>
         <div class="chrome-save"><input id="chromeRecordName" type="text" placeholder="Название сценария"><button type="button" id="chromeSave">Сохранить запись</button></div><ol class="chrome-steps" id="chromeRecordedList"></ol>
+        <details class="chrome-manual"><summary>Ручное действие · CSS, текст или роль</summary><div class="chrome-manual-grid"><select id="chromeManualAction" aria-label="Действие"><option value="click">Кликнуть</option><option value="wait_click">Ждать и кликнуть</option><option value="fill">Заполнить поле</option><option value="type">Напечатать</option><option value="scroll">Прокрутить</option><option value="press">Клавиша</option><option value="hover">Навести</option><option value="dblclick">Двойной клик</option><option value="select">Выбрать option</option><option value="wait_for">Ждать появления</option><option value="wait_gone">Ждать исчезновения</option><option value="text">Прочитать текст</option><option value="navigate">Открыть URL</option><option value="reload">Обновить страницу</option><option value="back">Назад</option><option value="screenshot">Снимок</option></select><select id="chromeManualKind" aria-label="Способ поиска"><option value="css">CSS</option><option value="text">Текст</option><option value="label">Label</option><option value="role:button">Роль: кнопка</option><option value="role:link">Роль: ссылка</option><option value="placeholder">Placeholder</option><option value="xpath">XPath</option></select><input id="chromeManualQuery" placeholder="Элемент или селектор" aria-label="Элемент"><input id="chromeManualValue" placeholder="Текст, число или URL" aria-label="Значение"><button type="button" id="chromeManualRun">Выполнить</button></div></details>
       </div>
       <div id="serverWorkspace">
       <div class="workers" id="workersPanel">
@@ -624,6 +632,7 @@ function renderScenario(card,worker){
   if(!steps.length || card._clientRun) return;
   if(card._scenarioId!==worker._j.id){
     card._scenarioId=worker._j.id;
+    BrowserCore.renderTimeline(card.querySelector('.scenario-detail-list'),steps,describeStep);
     card.querySelector('.scenario-steps').replaceChildren(...steps.map((step,index)=>{
       const label=describeStep(step);
       const li=document.createElement('li'); li.innerHTML='<b></b><span></span>'; li.querySelector('b').textContent=index+1; li.querySelector('span').textContent=label; li.title=`${index+1}. ${label} — нажми, чтобы повторять с этого шага`; return li;
@@ -637,6 +646,7 @@ function renderScenario(card,worker){
     li.classList.toggle('current',running && index===cur);
     li.classList.toggle('failed',status.phase==='error' && index===cur);
   });
+  BrowserCore.markTimeline(card.querySelector('.scenario-detail-list'),{current:running?cur:-1,completed:status.completed||0,failed:status.phase==='error'?cur:-1,selected:card._scenarioPick??-1});
   pane.classList.toggle('done',status.phase==='done');
   const stepLabel=i=>describeStep(steps[i]);
   const nowK=card.querySelector('.scenario-now-k'), nowT=card.querySelector('.scenario-now-t');
@@ -683,10 +693,11 @@ function clearScenarioPick(card){
 function renderClientProgress(card,index,total,phase){
   const pane=card.querySelector('.scenario-progress'); if(pane.hidden || (card._scenarioSteps||[]).length!==total) return;
   const lis=card.querySelectorAll('.scenario-steps li');
-  if(phase==='end'){ card._clientRun=false; return; }
+  if(phase==='end'){ card._clientRun=false; BrowserCore.markTimeline(card.querySelector('.scenario-detail-list'),{completed:total}); return; }
   card._clientRun=true;
   pane.classList.remove('error','done');
   lis.forEach((li,k)=>{ li.classList.toggle('done',k<index); li.classList.toggle('current',k===index); li.classList.remove('failed','picked'); });
+  BrowserCore.markTimeline(card.querySelector('.scenario-detail-list'),{current:index,completed:index});
   card.querySelector('.scenario-track i').style.width=`${index/total*100}%`;
   card.querySelector('.scenario-now-k').textContent=`Шаг ${index+1} из ${total}`;
   card.querySelector('.scenario-now-t').textContent=describeStep(card._steps?.[index]);
@@ -1005,6 +1016,11 @@ $('workersPanel').addEventListener('click', async e => {
     card.querySelector('.scenario-action').hidden=false;
     return;
   }
+  if(e.target.closest('.scenario-detail-list li')){
+    const row=e.target.closest('li'),card=row.closest('.worker'),index=Number(row.dataset.stepIndex);
+    card.querySelectorAll('.scenario-steps li')[index]?.click();
+    return;
+  }
   if(e.target.matches('.worker-url')){
     const card=e.target.closest('.worker'), input=card.querySelector('.worker-url-edit');
     input.value=e.target.textContent.trim(); e.target.hidden=true; input.hidden=false; input.focus(); input.select();
@@ -1053,18 +1069,14 @@ $('workersPanel').addEventListener('click', async e => {
       countInput.disabled=true; e.target.classList.add('running'); e.target.textContent='■ Остановить';
       let completedRuns=0, failedStep=0;
       try {
-        for(let run=0;run<repeats && !card._cancelReplay && card.isConnected;run++){
-          for(let i=Math.min(card._playFrom||0,steps.length-1);i<steps.length;i++){
-            if(card._cancelReplay || !card.isConnected) break;
-            renderClientProgress(card,i,steps.length,'run');
-            const result=await runAction(card,steps[i],{quiet:true,record:false,refresh:false});
-            if(!result?.ok){ failedStep=i+1; break; }
-            if(i<steps.length-1 && !steps.some(step=>step.action==='wait')) await new Promise(resolve=>setTimeout(resolve,1500));
-          }
-          if(failedStep || card._cancelReplay || !card.isConnected) break;
-          completedRuns++;
-          if(run<repeats-1) await new Promise(resolve=>setTimeout(resolve,500));
-        }
+        const result=await BrowserCore.run({steps,from:card._playFrom||0,repeats,
+          shouldStop:()=>card._cancelReplay||!card.isConnected,
+          onRepeat:async run=>{ if(run) await new Promise(resolve=>setTimeout(resolve,500)); },
+          onStep:async i=>renderClientProgress(card,i,steps.length,'run'),
+          execute:step=>runAction(card,step,{quiet:true,record:false,refresh:false}),
+          delayBetween:1500});
+        completedRuns=result.completed;
+        if(!result.ok&&!result.stopped) failedStep=result.index+1;
       } finally {
         card._replaying=false; countInput.disabled=false; e.target.disabled=false;
         renderClientProgress(card,0,steps.length,'end');
@@ -1254,7 +1266,7 @@ function render(data){
           <div class="worker-actions"><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
           <div class="worker-url" title="Нажми, чтобы изменить адрес вкладки"></div><input class="worker-url-edit" type="url" hidden spellcheck="false" autocomplete="off" aria-label="Новый адрес вкладки" placeholder="https://">
           <section class="scenario-panel worker-control"><div class="scenario-progress-head"><strong>Сценарий</strong><span class="scenario-progress-status"></span></div>
-            <div class="scenario-progress" hidden><div class="scenario-now"><span class="scenario-now-k"></span><span class="scenario-now-t"></span></div><div class="scenario-action" hidden><span class="scenario-action-t"></span><button type="button" class="scenario-run">▶ Запустить отсюда</button><button type="button" class="scenario-action-x" aria-label="Снять выбор" title="Снять выбор">✕</button></div><div class="scenario-track"><i></i></div><ol class="scenario-steps" aria-label="Шаги сценария"></ol></div>
+            <div class="scenario-progress" hidden><div class="scenario-now"><span class="scenario-now-k"></span><span class="scenario-now-t"></span></div><div class="scenario-action" hidden><span class="scenario-action-t"></span><button type="button" class="scenario-run">▶ Запустить отсюда</button><button type="button" class="scenario-action-x" aria-label="Снять выбор" title="Снять выбор">✕</button></div><div class="scenario-track"><i></i></div><ol class="scenario-steps" aria-label="Шаги сценария"></ol><ol class="action-timeline scenario-detail-list" aria-label="Действия сценария"></ol></div>
             <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><div class="repeat-control"><input type="number" class="repeat-count" min="1" max="100" step="1" value="1" aria-label="Сколько раз повторить"><span>раз</span><button type="button" class="record-replay">▶ Повторить</button></div><button type="button" class="record-save">💾 Сохранить</button><select class="macro-pick" aria-label="Открыть сценарий"><option value="">Открыть сценарий…</option></select><details class="recorder-more"><summary title="Ещё">⋯</summary><div class="recorder-menu"><button type="button" class="record-copy">Копировать шаги как JSON</button><button type="button" class="record-unselect">Повторять с начала</button></div></details><button type="button" class="record-clear icon" title="Очистить запись" aria-label="Очистить запись">🗑</button></div><div class="record-status" aria-live="polite"></div>
             <ol class="recorded-steps"></ol>
             <div class="steps-bulk" hidden><span class="steps-bulk-t"></span><button type="button" class="steps-delete">Удалить выбранные</button><button type="button" class="steps-unpick">Снять выбор</button></div>

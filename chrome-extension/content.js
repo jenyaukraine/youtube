@@ -1,5 +1,6 @@
 // Record only user actions in the attached tab. Passwords and private fields stay out of recordings.
 const scrollState = new WeakMap();
+const inputTimers = new WeakMap();
 function selectorFor(node) {
   if (!(node instanceof Element)) return '';
   if (node.id) return '#' + CSS.escape(node.id);
@@ -18,6 +19,7 @@ function safeField(node) {
   if (!(node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement || node instanceof HTMLSelectElement)) return false;
   if (node instanceof HTMLInputElement && ['password', 'hidden', 'file', 'credit-card'].includes(node.type)) return false;
   if (node.closest('[autocomplete="cc-number"],[autocomplete="current-password"],[autocomplete="new-password"]')) return false;
+  if (/password|passwd|credit.?card|card.?number|\bcvv\b|\bcvc\b|\botp\b|2fa/i.test([node.name, node.id, node.autocomplete].join(' '))) return false;
   return true;
 }
 function record(step) {
@@ -29,10 +31,19 @@ document.addEventListener('click', event => {
   const target = event.target.closest('button,a,input,[role="button"],label,summary') || event.target;
   record({action: 'point', kind: 'css', query: selectorFor(target), x: event.clientX / innerWidth, y: event.clientY / innerHeight});
 }, true);
+function recordField(field) {
+  record({action: 'fill', kind: 'css', query: selectorFor(field), value: String(field.value).slice(0, 2000)});
+}
+document.addEventListener('input', event => {
+  if (!event.isTrusted || !safeField(event.target)) return;
+  const field = event.target;
+  clearTimeout(inputTimers.get(field));
+  inputTimers.set(field, setTimeout(() => { inputTimers.delete(field); recordField(field); }, 500));
+}, true);
 document.addEventListener('change', event => {
   if (!event.isTrusted || !safeField(event.target)) return;
   const field = event.target;
-  record({action: 'fill', kind: 'css', query: selectorFor(field), value: String(field.value).slice(0, 2000)});
+  if (inputTimers.has(field)) { clearTimeout(inputTimers.get(field)); inputTimers.delete(field); recordField(field); }
 }, true);
 document.addEventListener('scroll', event => {
   const element = event.target instanceof Element ? event.target : document.scrollingElement;
