@@ -354,7 +354,7 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
     <div class="header-actions"><a href="/scenarios.html">Сценарии ↗</a><div class="badge"><span class="dot" id="connDot"></span><span id="connTxt">подключение…</span></div></div>
   </header>
 
-  <div class="goal">
+  <div class="goal" id="goalPanel">
     <div>
       <div class="lbl">Время воспроизведения видео</div>
       <div class="big"><span id="goalHours">0.000</span> <small>ч</small></div>
@@ -405,7 +405,7 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
 
       <label for="startScenario">Сценарий при открытии</label>
       <select id="startScenario" aria-label="Сценарий при открытии"><option value="">Нет, просто открыть страницу</option></select>
-      <div class="hint">Вкладка откроет адрес и сразу выполнит сохранённые шаги. Повторы — в поле справа от «Повторить».</div>
+      <div class="hint" id="scenarioHint">Вкладка откроет адрес и сразу выполнит сохранённые шаги. Повторы — в поле справа от «Повторить».</div>
       <details class="advanced server-only"><summary>HTTP-заголовки для новых вкладок</summary>
         <textarea id="customHeaders" spellcheck="false" placeholder='{"Accept-Language":"ru-RU,ru;q=0.9"}'></textarea>
         <div class="hint">Формат JSON. Применяются ко всем запросам новой вкладки. Токены, Cookie и Authorization сюда не вводи.</div>
@@ -1212,7 +1212,7 @@ function render(data){
 
   // goal
   $('goalHours').textContent = fmtH(total);
-  $('heroWorkers').textContent = allWorkers.length;
+  if($('launchMethod').value !== 'chrome') $('heroWorkers').textContent = allWorkers.length;
 
   // totals
   $('tActive').textContent = allWorkers.length;
