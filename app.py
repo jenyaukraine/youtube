@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from playwright.async_api import async_playwright, Browser, Page, Playwright
 
 from katya.actions import Macro, Step, normalize_url, run_step, run_steps, validate_step
-from katya.profiles import PROFILES, context_options, find_profile, random_profile
+from katya.profiles import PROFILES, context_options, find_profile
 from katya.triggers import Trigger, TriggerEngine, validate_trigger
 
 app = FastAPI(title="Katya Browser Lab")
@@ -84,7 +84,7 @@ class Worker:
         }
 
 class Job:
-    def __init__(self, jid, url, workers, duration, cookies, user_agent_mode="random",
+    def __init__(self, jid, url, workers, duration, cookies, user_agent_mode="chrome",
                  dialogs="dismiss", profile=""):
         self.id = jid
         self.url = url
@@ -358,8 +358,12 @@ async def run_job(job: Job):
             profile = None
             if job.profile:
                 profile = find_profile(job.profile)
-            elif job.user_agent_mode == "random":
-                profile = random_profile()
+            elif job.user_agent_mode in {"chrome", "random"}:
+                names = ("Desktop Chrome", "Desktop Edge") if job.user_agent_mode == "random" else ("Desktop Chrome",)
+                available = [name for name in names if name in PLAYWRIGHTS[job.id].devices]
+                if available:
+                    name = secrets.choice(available)
+                    profile = {**PLAYWRIGHTS[job.id].devices[name], "name": name}
             w = Worker(f"{job.id}-{i}", job.url, cookies=job.cookies,
                        ua=profile["user_agent"] if profile else None,
                        profile=profile["name"] if profile else "")
@@ -462,7 +466,7 @@ class StartReq(BaseModel):
     duration: int = 0          # 0 = until stopped
     cookies: str = ""           # raw cookie string (optional)
     headers: Dict[str, str] = {}
-    user_agent_mode: Literal["random", "browser"] = "random"
+    user_agent_mode: Literal["chrome", "random", "browser"] = "chrome"
     profile: str = ""           # fixed profile name from /api/profiles (optional)
     dialogs: Literal["dismiss", "accept"] = "dismiss"
 
@@ -628,7 +632,7 @@ async def browser_action(job_id: str, worker_id: str, req: ActionReq,
     worker = next((w for w in job.workers_list if w.id == worker_id), None)
     if worker:
         worker.url = page.url
-    if step.action != "inspect":
+    if step.action not in {"inspect", "move"}:
         job.screenshots.pop(worker_id, None)
         log(f"worker {worker_id} action {step.action}")
     return {"message": "Действие выполнено", **result}

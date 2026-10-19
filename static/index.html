@@ -318,8 +318,8 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
       </div>
 
       <label for="uaMode">Профиль браузера для каждой вкладки</label>
-      <select id="uaMode" aria-label="Профиль браузера"><option value="random">Случайный Chrome или Edge</option><option value="browser">Обычный Chromium</option></select>
-      <div class="hint">Профиль выбирается при открытии вкладки. IP-адрес остаётся прежним.</div>
+      <select id="uaMode" aria-label="Профиль браузера"><option value="chrome">Chrome той же версии, что движок</option><option value="random">Случайный Chrome или Edge</option><option value="browser">Chromium без профиля</option></select>
+      <div class="hint">Версия профиля берётся из установленного Playwright. Профиль выбирается при открытии вкладки.</div>
 
       <details class="advanced"><summary>HTTP-заголовки для новых вкладок</summary>
         <textarea id="customHeaders" spellcheck="false" placeholder='{"Accept-Language":"ru-RU,ru;q=0.9"}'></textarea>
@@ -559,6 +559,29 @@ function queuePreviewScroll(card, pixels, point){
     if(Math.abs(card._wheelDelta)>=1) queuePreviewScroll(card,0,card._wheelPoint);
   },120);
 }
+
+function queuePreviewMove(card,point){
+  if(!point || card.dataset.previewMode==='pick') return;
+  card._pendingMove=point;
+  if(card._moveTimer || card._moveInFlight) return;
+  card._moveTimer=setTimeout(async () => {
+    card._moveTimer=null;
+    if(!card.isConnected || !card._pendingMove) return;
+    const next=card._pendingMove;
+    card._pendingMove=null;
+    card._moveInFlight=true;
+    card._inputChain=(card._inputChain || Promise.resolve()).then(() => runAction(card,{action:'move',...next},{quiet:true,record:false,refresh:false}));
+    await card._inputChain;
+    card._moveInFlight=false;
+    if(card._pendingMove) queuePreviewMove(card,card._pendingMove);
+  },120);
+}
+
+$('workersPanel').addEventListener('pointermove', e => {
+  if(e.buttons || !e.target.matches('.worker-preview img')) return;
+  const card=e.target.closest('.worker');
+  queuePreviewMove(card,previewPoint(e.target,e.clientX,e.clientY));
+});
 
 $('workersPanel').addEventListener('wheel', e => {
   const img = e.target.closest('.worker-preview img');

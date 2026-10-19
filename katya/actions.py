@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 
 ActionName = Literal[
     "navigate", "reload", "back",
-    "click", "wait_click", "dblclick", "point", "mouse_drag", "inspect",
+    "click", "wait_click", "dblclick", "point", "move", "mouse_drag", "inspect",
     "fill", "type", "press", "hover", "drag", "scroll", "select",
     "wait", "wait_for", "wait_gone", "wait_url",
     "text", "attribute", "exists", "count", "screenshot", "page_text",
@@ -99,7 +99,7 @@ def validate_step(step: Step) -> Optional[str]:
         return "Действие type: укажи текст"
     if step.action == "navigate" and not normalize_url(step.value):
         return "Неверный URL"
-    if step.action in {"point", "inspect", "mouse_drag"} and not (0 <= step.x <= 1 and 0 <= step.y <= 1):
+    if step.action in {"point", "move", "inspect", "mouse_drag"} and not (0 <= step.x <= 1 and 0 <= step.y <= 1):
         return "Точка вне вкладки (x и y должны быть от 0 до 1)"
     if step.action == "mouse_drag" and not (0 <= step.end_x <= 1 and 0 <= step.end_y <= 1):
         return "Конечная точка вне вкладки (end_x и end_y от 0 до 1)"
@@ -187,6 +187,11 @@ async def run_step(page: Page, step: Step, *, screenshot_sink=None) -> Dict[str,
             if not viewport:
                 return {"ok": False, "error": "Неизвестен размер вкладки"}
             await page.mouse.click(round(step.x * viewport["width"]), round(step.y * viewport["height"]))
+        elif step.action == "move":
+            viewport = page.viewport_size
+            if not viewport:
+                return {"ok": False, "error": "Неизвестен размер вкладки"}
+            await page.mouse.move(round(step.x * viewport["width"]), round(step.y * viewport["height"]))
         elif step.action == "mouse_drag":
             viewport = page.viewport_size
             if not viewport:
