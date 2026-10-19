@@ -799,7 +799,19 @@ function loadShot(card, force=false){
   const now = Date.now();
   card._shotLoading=true;
   card.querySelector('.shot-time').textContent = img.hidden ? 'Подключаю кадр…' : '● Live';
-  img.src = `/api/worker/${encodeURIComponent(job)}/${encodeURIComponent(worker)}/screenshot?force=${force ? 1 : 0}&t=${now}`;
+  const next = new Image();
+  next.src = `/api/worker/${encodeURIComponent(job)}/${encodeURIComponent(worker)}/screenshot?force=${force ? 1 : 0}&t=${now}`;
+  next.decode().then(() => {
+    if(!card.isConnected) return;
+    img.src = next.src;
+    img.hidden = false;
+    card.querySelector('.preview-note').hidden = true;
+    card.querySelector('.shot-time').textContent = '● Live ' + new Date().toLocaleTimeString('ru-RU');
+  }).catch(() => {
+    if(!card.isConnected) return;
+    card.querySelector('.shot-time').textContent = 'Кадр недоступен';
+    if(img.hidden) card.querySelector('.preview-note').textContent = 'Снимок пока недоступен';
+  }).finally(() => { card._shotLoading=false; });
 }
 
 setInterval(() => {
@@ -913,8 +925,6 @@ function render(data){
             <ol class="recorded-steps"></ol>
           </details>`;
         const img = card.querySelector('img');
-        img.onload = () => { card._shotLoading=false; img.hidden = false; card.querySelector('.preview-note').hidden = true; card.querySelector('.shot-time').textContent = '● Live ' + new Date().toLocaleTimeString('ru-RU'); };
-        img.onerror = () => { card._shotLoading=false; card.querySelector('.shot-time').textContent = 'Кадр недоступен'; if(img.hidden) card.querySelector('.preview-note').textContent = 'Снимок пока недоступен'; };
         panel.append(card);
         updateActionFields(card);
         card._steps=[];
