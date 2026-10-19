@@ -20,24 +20,44 @@ export function TabCard({ job, worker, scenarios, macros, onScenariosChanged }: 
   const keyRef = useRef<HTMLTextAreaElement>(null);
   const [frame, setFrame] = useState('');
   const [frameAt, setFrameAt] = useState('');
-  const [touch, setTouch] = useState(0);
+  const touchedAt = useRef(0);
+  const recordingRef = useRef(false);
+  const requestFrame = useRef<() => void>(() => {});
   const [hit, setHit] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
-  // ---- живой кадр: чаще для вкладки, которой пользуются
+  // ---- живой кадр: один запрос за раз, быстрый отклик после действия
   useEffect(() => {
-    let busy = false, stop = false;
+    let busy = false, stop = false, visible = false, urgent = false;
+    let timer: number | undefined;
+    const schedule = (delay: number) => { window.clearTimeout(timer); if (!stop) timer = window.setTimeout(tick, delay); };
     const tick = async () => {
-      if (stop || document.hidden || busy) return;
+      if (stop) return;
+      if (document.hidden || !visible) { schedule(800); return; }
+      if (busy) { urgent = true; return; }
       busy = true;
       const url = screenshotUrl(job.id, worker.id, true);
-      await new Promise<void>(resolve => { const i = new Image(); i.onload = () => { setFrame(url); setFrameAt(new Date().toLocaleTimeString('ru-RU')); resolve(); }; i.onerror = () => resolve(); i.src = url; });
+      await new Promise<void>(resolve => {
+        const i = new Image();
+        i.onload = () => { if (!stop) { setFrame(url); setFrameAt(new Date().toLocaleTimeString('ru-RU')); } resolve(); };
+        i.onerror = () => resolve();
+        i.src = url;
+      });
       busy = false;
+      const active = recordingRef.current || Date.now() - touchedAt.current < 5000;
+      schedule(urgent ? 180 : active ? 280 : 1200);
+      urgent = false;
     };
-    tick();
-    const fast = Date.now() - touch < 15000;
-    const t = window.setInterval(tick, fast ? 700 : 3500);
-    return () => { stop = true; window.clearInterval(t); };
-  }, [job.id, worker.id, touch]);
+    requestFrame.current = () => {
+      touchedAt.current = Date.now();
+      if (busy) urgent = true;
+      else schedule(40);
+    };
+    const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; if (visible) schedule(0); }, { rootMargin: '150px' });
+    if (previewRef.current) observer.observe(previewRef.current);
+    const onVisibility = () => { if (!document.hidden && visible) schedule(0); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { stop = true; window.clearTimeout(timer); observer.disconnect(); document.removeEventListener('visibilitychange', onVisibility); requestFrame.current = () => {}; };
+  }, [job.id, worker.id]);
 
   useEffect(() => {
     const onHit = (e: Event) => { const d = (e as CustomEvent).detail; if (d.job === job.id && d.worker === worker.id) { setHit(d.box); window.setTimeout(() => setHit(null), 4000); } };
@@ -51,6 +71,7 @@ export function TabCard({ job, worker, scenarios, macros, onScenariosChanged }: 
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [repeat, setRepeat] = useState(1);
   const [replaying, setReplaying] = useState(false);
+  recordingRef.current = recording || replaying || worker.scenario?.phase === 'running';
   const [clientRun, setClientRun] = useState<ClientRun | null>(null);
   const [chipPicked, setChipPicked] = useState<number | null>(null);
   const cancelRef = useRef(false);
@@ -70,8 +91,9 @@ export function TabCard({ job, worker, scenarios, macros, onScenariosChanged }: 
 
   const act = useCallback(async (step: Step, opts: { record?: boolean; quiet?: boolean } = {}) => {
     if (!owned) { toast('Эта вкладка открыта не из этой панели: действия недоступны', 'err'); return null; }
-    setTouch(Date.now());
+    touchedAt.current = Date.now();
     const r = await runAction(job.id, worker.id, step);
+    requestFrame.current();
     if (!opts.quiet) toast(r.ok ? 'Действие выполнено' : (r.error || 'Действие не выполнено'), r.ok ? 'ok' : 'err');
     if (r.ok && recording && opts.record !== false && step.action !== 'inspect' && step.action !== 'move') {
       setSteps(prev => {
@@ -134,6 +156,7 @@ export function TabCard({ job, worker, scenarios, macros, onScenariosChanged }: 
 
   // ---- запись / повтор / сохранение
   const toggleRecord = () => {
+    requestFrame.current();
     setRecording(r => {
       if (!r) { lastActRef.current = Date.now(); if (!steps.length) startUrlRef.current = worker.url; }
       return !r;
@@ -143,7 +166,7 @@ export function TabCard({ job, worker, scenarios, macros, onScenariosChanged }: 
     if (replaying) { cancelRef.current = true; return; }
     const list = [...steps]; if (!list.length) { toast('Нет записанных шагов', 'err'); return; }
     if (list.some(s => /{{\s*[a-zA-Z][\w]*\s*}}/.test(s.value || ''))) { toast('В записи есть переменные. Задай их на странице «Сценарии»', 'err'); return; }
-    setReplaying(true); cancelRef.current = false; setTouch(Date.now());
+    setReplaying(true); cancelRef.current = false; requestFrame.current();
     let runs = 0, failed = 0;
     const showProgress = job.scenario_steps?.length === list.length;
     try {
@@ -152,6 +175,7 @@ export function TabCard({ job, worker, scenarios, macros, onScenariosChanged }: 
           if (cancelRef.current) break;
           if (showProgress) setClientRun({ index: i, total: list.length });
           const r = await runAction(job.id, worker.id, list[i]);
+          requestFrame.current();
           if (!r.ok) { failed = i + 1; break; }
           if (i < list.length - 1 && !list.some(s => s.action === 'wait')) await new Promise(res => setTimeout(res, 1200));
         }
@@ -234,7 +258,7 @@ export function TabCard({ job, worker, scenarios, macros, onScenariosChanged }: 
         <span className="act">{worker.last_action || worker.state}</span><span className="secs">{(worker.watch_seconds / 3600).toFixed(3)} ч</span>
       </div>
       <div className="worker-actions">
-        <button type="button" onClick={async () => { const r = await reloadWorker(job.id, worker.id); toast(r.ok ? 'Вкладка перезагружена' : (r.error || 'Ошибка'), r.ok ? 'ok' : 'err'); }}>Перезагрузить вкладку</button>
+        <button type="button" onClick={async () => { const r = await reloadWorker(job.id, worker.id); requestFrame.current(); toast(r.ok ? 'Вкладка перезагружена' : (r.error || 'Ошибка'), r.ok ? 'ok' : 'err'); }}>Перезагрузить вкладку</button>
         <button type="button" className="worker-stop" onClick={async () => { await stopWorker(job.id, worker.id); }}>Закрыть</button>
       </div>
       {editUrl == null

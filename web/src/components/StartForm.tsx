@@ -50,6 +50,12 @@ export function StartForm({ jobs, scenarios, macros, ownJob }: Props) {
       <input type="url" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && start()} placeholder="https://example.com" spellCheck={false} autoComplete="url" />
       <div className="hint">Любой полный http:// или https:// URL.</div>
 
+      <label>Способ запуска</label>
+      <div className="method-switch" role="group" aria-label="Способ запуска">
+        <button type="button" className="active" aria-pressed="true"><span>◈</span><b>Playwright</b><small>На сервере · выбран</small></button>
+        <button type="button" aria-pressed="false" onClick={() => { location.href = '/legacy/?method=chrome'; }}><span>◎</span><b>Мой Chrome</b><small>Через расширение</small></button>
+      </div>
+
       <label>Потоков (параллельных окон)</label>
       <div className="slider-row"><input type="range" min={1} max={8} value={workers} onChange={e => setWorkers(Number(e.target.value))} /><div className="slider-val">{workers}</div></div>
 

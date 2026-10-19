@@ -68,7 +68,7 @@ def main():
             target = context.new_page()
             target.goto(fixture_url)
             panel = context.new_page()
-            panel.goto("http://127.0.0.1:8010/?method=chrome")
+            panel.goto("http://127.0.0.1:8010/legacy/?method=chrome")
             panel.wait_for_function("window.chromePanel && window.BrowserCore")
             tabs = bridge(panel, "tabs")
             assert tabs["ok"], tabs

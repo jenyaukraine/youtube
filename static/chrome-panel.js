@@ -6,7 +6,7 @@
   const pending = new Map();
   let tab = null, playing = false, cancelled = false, recorded = [], recording = false;
   let draftActive = false;
-  let shotBusy = false, lastShotAt = 0, dragging = false, lastMoveAt = 0;
+  let shotBusy = false, shotUrgent = false, shotTimer = null, lastActivityAt = 0, dragging = false, lastMoveAt = 0;
   let inputQueue = Promise.resolve(), lastInputError = '';
   let lastVideoTime = null, lastVideoAt = 0;
   let selectedStep = null, failedStep = null, media = null;
@@ -93,6 +93,7 @@
     $('btnStart').textContent = chromeMode ? 'Открыть в Chrome' : 'Запустить';
     showScenario();
     if (chromeMode) refreshStatus();
+    else clearTimeout(shotTimer);
   }
   async function refreshStatus() {
     const result = await bridge('status');
@@ -170,7 +171,8 @@
     box.hidden = false;
   }
   async function shot(silent = false) {
-    if (!tab || shotBusy || $('launchMethod').value !== 'chrome') return;
+    if (!tab || $('launchMethod').value !== 'chrome' || document.visibilityState !== 'visible') return;
+    if (shotBusy) { shotUrgent = true; return; }
     shotBusy = true;
     try {
       const result = await bridge('screenshot');
@@ -181,11 +183,23 @@
       $('chromeShotImage').src = result.image;
       $('chromeShotImage').hidden = false;
       $('chromeShotFrame').classList.remove('empty');
-      lastShotAt = Date.now();
     } catch (error) {
       if (!silent) toast(error.message, 'err');
       if ($('chromeShotImage').hidden) $('chromeShotEmpty').textContent = error.message;
-    } finally { shotBusy = false; }
+    } finally {
+      shotBusy = false;
+      clearTimeout(shotTimer);
+      if (tab && $('launchMethod').value === 'chrome' && document.visibilityState === 'visible') {
+        const active = recording || Date.now() - lastActivityAt < 5000;
+        shotTimer = setTimeout(() => shot(true), shotUrgent ? 180 : active ? 280 : 1200);
+      }
+      shotUrgent = false;
+    }
+  }
+  function wakeShot() {
+    lastActivityAt = Date.now();
+    if (shotBusy) shotUrgent = true;
+    else { clearTimeout(shotTimer); shotTimer = setTimeout(() => shot(true), 40); }
   }
   function substitute(step, scenario) {
     const vars = scenario.variables || {};
@@ -248,7 +262,9 @@
           try { step = substitute(raw, selected); } catch (error) { return {ok: false, error: error.message}; }
           if (step.action === 'wait') { await pause(Math.min(60000, Math.max(0, Number(step.value || step.duration_ms) || 0))); return {ok: !cancelled}; }
           if (step.action === 'screenshot') { await shot(); return {ok: true}; }
-          return bridge('execute', {step});
+          const result = await bridge('execute', {step});
+          wakeShot();
+          return result;
         }});
       if (!result.ok && !result.stopped) {
         failedStep = result.index; selectedStep = result.index; items[result.index]?.classList.add('failed');
@@ -293,6 +309,7 @@
       const result = await bridge('input', payload);
       if (!result.ok) throw new Error(result.error || 'Нет ответа от вкладки');
       lastInputError = '';
+      wakeShot();
     }).catch(error => {
       if (error.message !== lastInputError) { lastInputError = error.message; toast(error.message, 'err'); }
     });
@@ -379,6 +396,7 @@
       const r = await bridge('record', {enabled: true});
       if (!r.ok) { toast(r.error, 'err'); return; }
       recorded = []; draftActive = false; recording = true;
+      wakeShot();
       $('chromeRecord').classList.add('recording'); $('chromeRecord').textContent = '■ Остановить запись';
       $('chromeRecordedList').replaceChildren(); runState('● Запись идёт · действия появятся после остановки', 'running');
       return;
@@ -388,6 +406,7 @@
     const r = await bridge('events');
     if (!r.ok) { toast(r.error, 'err'); return; }
     recorded = eventsToSteps(r.events || []); draftActive = recorded.length > 0; recording = false;
+    wakeShot();
     $('chromeRecord').classList.remove('recording'); $('chromeRecord').textContent = '● Записать шаги';
     showScenario();
     runState(recorded.length ? `${recorded.length} шагов · нажми «Сохранить» или «Повторить»` : 'Запись остановлена · действий нет');
@@ -425,6 +444,6 @@
   setMode(); showScenario(); fillMacroPick($('chromeMacroPick'));
   setInterval(() => { if ($('launchMethod').value === 'chrome' && !playing) refreshStatus(); }, 3000);
   setInterval(refreshMedia, 3000);
-  setInterval(() => { if ($('launchMethod').value === 'chrome' && tab && document.visibilityState === 'visible' && Date.now() - lastShotAt > 650) shot(true); }, 700);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') shot(true); else clearTimeout(shotTimer); });
   window.chromePanel = {start, stop, refresh: refreshStatus, get playing() { return playing; }};
 })();
