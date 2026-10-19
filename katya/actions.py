@@ -48,6 +48,7 @@ class Step(BaseModel):
     query: str = ""
     role: str = "button"
     value: str = ""
+    replace: bool = False             # overwrite the currently focused text field before typing
     x: float = 0
     y: float = 0
     end_x: float = 0                 # mouse_drag end point (fractions)
@@ -228,6 +229,9 @@ async def run_step(page: Page, step: Step, *, screenshot_sink=None) -> Dict[str,
         elif step.action == "press":
             await page.keyboard.press(step.value.strip())
         elif step.action == "type" and not query:
+            if step.replace:
+                await page.keyboard.press("ControlOrMeta+A")
+                await page.keyboard.press("Delete")
             await page.keyboard.type(step.value, delay=0)   # into whatever element has focus
         elif step.action == "wait":
             await asyncio.sleep(min(60.0, max(0.0, float(step.value or "1000") / 1000)))

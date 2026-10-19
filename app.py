@@ -629,10 +629,12 @@ async def browser_action(job_id: str, worker_id: str, req: ActionReq,
         result = await run_step(page, step, screenshot_sink=make_screenshot_sink(worker_id))
         if result["ok"] and step.action in {"type", "fill"}:
             try:
-                result["input_type"] = await page.evaluate(
-                    "() => (document.activeElement?.getAttribute('type') || '').toLowerCase()")
+                result["input_focus"] = await page.evaluate("""() => ({
+                  tag: document.activeElement?.tagName.toLowerCase() || '',
+                  type: (document.activeElement?.getAttribute('type') || '').toLowerCase()
+                })""")
             except Exception:
-                result["input_type"] = ""
+                result["input_focus"] = {"tag": "", "type": ""}
     if not result["ok"]:
         return JSONResponse(result, status_code=503 if "Не удалось" in result["error"] else 400)
     worker = next((w for w in job.workers_list if w.id == worker_id), None)
