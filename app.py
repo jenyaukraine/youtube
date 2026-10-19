@@ -374,15 +374,15 @@ async def run_job(job: Job):
             profile = None
             if job.profile:
                 profile = find_profile(job.profile)
-            elif job.user_agent_mode in {"chrome", "random"} and not (BROWSER_CHANNEL == "chrome" and job.user_agent_mode == "chrome"):
-                names = ("Desktop Chrome", "Desktop Edge") if job.user_agent_mode == "random" else ("Desktop Chrome",)
+            elif job.user_agent_mode == "random":
+                names = ("Desktop Chrome", "Desktop Edge")
                 available = [name for name in names if name in PLAYWRIGHTS[job.id].devices]
                 if available:
                     name = secrets.choice(available)
                     profile = {**PLAYWRIGHTS[job.id].devices[name], "name": name}
             w = Worker(f"{job.id}-{i}", job.url, cookies=job.cookies,
                        ua=profile["user_agent"] if profile else None,
-                       profile=profile["name"] if profile else ("Installed Chrome" if BROWSER_CHANNEL == "chrome" else ""))
+                       profile=profile["name"] if profile else ("Installed Chrome" if BROWSER_CHANNEL == "chrome" else "Bundled Chromium"))
             job.workers_list.append(w)
             # Each tab has an isolated browser context and its own identity profile.
             ctx = await browser.new_context(
@@ -397,7 +397,7 @@ async def run_job(job: Job):
                 except Exception as e:
                     log(f"cookie load failed for {w.id}: {str(e)[:80]}")
             page = await ctx.new_page()
-            if BROWSER_CHANNEL == "chrome" and job.user_agent_mode == "chrome":
+            if not profile:
                 w.ua = await page.evaluate("navigator.userAgent")
             attach_page_handlers(job, w, page)
             job.pages[w.id] = page
