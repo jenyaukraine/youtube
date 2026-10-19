@@ -3,9 +3,11 @@ import asyncio
 import json
 import os
 import re
+import secrets
 import time
 import uuid
-from typing import Dict, List, Optional
+from urllib.parse import urlsplit
+from typing import Dict, List, Literal, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -13,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from playwright.async_api import async_playwright, Browser, Page, Playwright
 
-app = FastAPI(title="Katya ViewBot")
+app = FastAPI(title="Katya Browser Lab")
 
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
@@ -34,6 +36,7 @@ class Worker:
     def snapshot(self):
         return {
             "id": self.id,
+            "url": self.url,
             "state": self.state,
             "watch_seconds": round(self.watch_seconds, 1),
             "loop": self.loop,
@@ -56,6 +59,7 @@ class Job:
         self.worker_tasks: Dict[str, asyncio.Task] = {}
         self.stop_flag = False
         self.stop_lock = asyncio.Lock()
+        self.control_token = secrets.token_urlsafe(24)
         self.screenshots: Dict[str, tuple] = {}
         self.screenshot_locks: Dict[str, asyncio.Lock] = {}
         self.page_locks: Dict[str, asyncio.Lock] = {}
@@ -138,10 +142,25 @@ def parse_video_id(url: str) -> Optional[str]:
         return url
     return None
 
+def normalize_browser_url(raw: str) -> Optional[str]:
+    raw = raw.strip()
+    if len(raw) > 2048 or any(ch in raw for ch in "\r\n\x00"):
+        return None
+    if not raw.startswith(("http://", "https://")):
+        video_id = parse_video_id(raw)
+        return f"https://www.youtube.com/watch?v={video_id}" if video_id else None
+    try:
+        parts = urlsplit(raw)
+    except ValueError:
+        return None
+    if not parts.hostname or parts.username or parts.password:
+        return None
+    return raw
+
 # ---------------- worker loop ----------------
 async def worker_loop(job: Job, w: Worker, page: Page):
     w.state = "starting"
-    base = f"https://www.youtube.com/watch?v={parse_video_id(job.url)}"
+    base = job.url
     try:
         await page.goto(base, wait_until="domcontentloaded", timeout=60000)
         w.state = "checking"
@@ -157,25 +176,27 @@ async def worker_loop(job: Job, w: Worker, page: Page):
             last_tick = now
 
             try:
-                playback = await page.evaluate("""() => {
+                playback = await page.evaluate(r"""() => {
                   const text = document.body?.innerText || '';
                   const video = document.querySelector('video');
                   return {
                     consent: location.hostname.startsWith('consent.') ||
-                      /Прежде чем перейти к YouTube|Before you continue to YouTube|Bevor Sie zu YouTube weitergehen|Avant de continuer sur YouTube|Перш ніж перейти на YouTube|Принять все|Accept all|Alle akzeptieren/i.test(text),
+                      (/(^|\.)youtube\.com$/.test(location.hostname) &&
+                       /Прежде чем перейти к YouTube|Before you continue to YouTube|Bevor Sie zu YouTube weitergehen|Avant de continuer sur YouTube|Перш ніж перейти на YouTube|Принять все|Accept all|Alle akzeptieren/i.test(text)),
                     time: video ? video.currentTime : null,
                     paused: video ? video.paused : true,
                     ready: video ? video.readyState : 0
                   };
                 }""")
+                w.url = page.url
                 video_time = playback["time"]
                 progress = video_time - last_video_time if video_time is not None and last_video_time is not None else 0
                 if playback["consent"]:
                     w.state = "blocked"
                     w.last_action = "Окно согласия YouTube"
                 elif video_time is None:
-                    w.state = "checking"
-                    w.last_action = "Видео не найдено"
+                    w.state = "ready"
+                    w.last_action = "Страница открыта"
                 elif not playback["paused"] and playback["ready"] >= 2 and 0.15 < progress <= elapsed + 0.5:
                     w.state = "watching"
                     w.last_action = "Видео воспроизводится"
@@ -331,9 +352,9 @@ def cookies_from_string(s: str) -> List[dict]:
 
 @app.post("/api/start")
 async def start(req: StartReq):
-    vid = parse_video_id(req.url)
-    if not vid:
-        return JSONResponse({"ok": False, "error": "Не могу распознать YouTube-ссылку"}, status_code=400)
+    url = normalize_browser_url(req.url)
+    if not url:
+        return JSONResponse({"ok": False, "error": "Укажи полный http:// или https:// URL"}, status_code=400)
     header_error = validate_headers(req.headers)
     if header_error:
         return JSONResponse({"ok": False, "error": header_error}, status_code=400)
@@ -341,12 +362,13 @@ async def start(req: StartReq):
     duration = max(0, int(req.duration))
     jid = uuid.uuid4().hex[:8]
     cookies = cookies_from_string(req.cookies)
-    job = Job(jid, f"https://www.youtube.com/watch?v={vid}", workers, duration, cookies)
+    job = Job(jid, url, workers, duration, cookies)
     job.headers = req.headers
     JOBS[jid] = job
     asyncio.create_task(run_job(job))
     log(f"NEW JOB {jid} url={job.url} workers={workers} duration={duration} cookies={'yes' if cookies else 'no'}")
-    return {"ok": True, "id": jid, "video_id": vid, "workers": workers}
+    return {"ok": True, "id": jid, "workers": workers,
+            "control_token": job.control_token}
 
 @app.get("/api/status")
 async def status():
@@ -411,6 +433,113 @@ async def reload_worker(job_id: str, worker_id: str):
         worker.last_action = f"Перезагрузка: {str(e)[:60]}"
         return JSONResponse({"ok": False, "error": "Не удалось перезагрузить вкладку"}, status_code=503)
 
+class BrowserAction(BaseModel):
+    action: Literal["click", "point", "inspect", "fill", "hover", "drag", "scroll", "press", "navigate"]
+    kind: Literal["css", "text", "role", "label"] = "css"
+    query: str = ""
+    role: str = "button"
+    value: str = ""
+    x: float = 0
+    y: float = 0
+    control_token: str
+
+@app.post("/api/worker/{job_id}/{worker_id}/action")
+async def browser_action(job_id: str, worker_id: str, req: BrowserAction):
+    job = JOBS.get(job_id)
+    if not job or not secrets.compare_digest(req.control_token, job.control_token):
+        return JSONResponse({"ok": False, "error": "Нет доступа к этой вкладке"}, status_code=403)
+    page = job.pages.get(worker_id) if job.status == "running" else None
+    if not page or page.is_closed():
+        return JSONResponse({"ok": False, "error": "Вкладка не найдена"}, status_code=404)
+    query = req.query.strip()
+    if len(query) > 200 or len(req.value) > 2048:
+        return JSONResponse({"ok": False, "error": "Слишком длинный запрос"}, status_code=400)
+    allowed_roles = {"button", "link", "checkbox", "radio", "tab", "menuitem", "textbox"}
+    if req.kind == "role" and req.role not in allowed_roles:
+        return JSONResponse({"ok": False, "error": "Неподдерживаемая роль"}, status_code=400)
+    if req.action in {"click", "fill", "hover", "drag"} and not query:
+        return JSONResponse({"ok": False, "error": "Укажи элемент"}, status_code=400)
+    if req.action in {"drag", "press", "navigate"} and not req.value.strip():
+        return JSONResponse({"ok": False, "error": "Укажи значение действия"}, status_code=400)
+    if req.action == "navigate" and not normalize_browser_url(req.value):
+        return JSONResponse({"ok": False, "error": "Неверный URL"}, status_code=400)
+    if req.action in {"point", "inspect"} and not (0 <= req.x <= 1 and 0 <= req.y <= 1):
+        return JSONResponse({"ok": False, "error": "Точка вне вкладки"}, status_code=400)
+    def element(q: str):
+        if req.kind == "css":
+            return page.locator(q)
+        if req.kind == "text":
+            return page.get_by_text(q, exact=False)
+        if req.kind == "role":
+            return page.get_by_role(req.role, name=q, exact=False)
+        return page.get_by_label(q, exact=False)
+    try:
+        if req.action == "inspect":
+            viewport = page.viewport_size
+            if not viewport:
+                return JSONResponse({"ok": False, "error": "Неизвестен размер вкладки"}, status_code=400)
+            found = await page.evaluate("""({x,y}) => {
+              let el = document.elementFromPoint(x,y);
+              if(!el) return null;
+              el = el.closest('button,a,input,textarea,select,label,[role]') || el;
+              const tag = el.tagName.toLowerCase();
+              let selector = '';
+              if(el.id && document.querySelectorAll('#'+CSS.escape(el.id)).length === 1){
+                selector = '#'+CSS.escape(el.id);
+              } else {
+                const parts = [];
+                for(let node=el; node && node.nodeType===1 && parts.length<8; node=node.parentElement){
+                  const name=node.tagName.toLowerCase();
+                  const same=[...(node.parentElement?.children||[])].filter(s=>s.tagName===node.tagName);
+                  parts.unshift(name+(same.length>1 ? ':nth-of-type('+(same.indexOf(node)+1)+')' : ''));
+                  selector=parts.join(' > ');
+                  if(document.querySelectorAll(selector).length===1) break;
+                }
+              }
+              return {selector,tag,text:(el.innerText||el.getAttribute('aria-label')||'').trim().slice(0,100)};
+            }""", {"x": round(req.x * viewport["width"]), "y": round(req.y * viewport["height"])})
+            if not found:
+                return JSONResponse({"ok": False, "error": "Элемент не найден"}, status_code=404)
+            return {"ok": True, **found}
+        elif req.action == "point":
+            viewport = page.viewport_size
+            if not viewport:
+                return JSONResponse({"ok": False, "error": "Неизвестен размер вкладки"}, status_code=400)
+            await page.mouse.click(round(req.x * viewport["width"]), round(req.y * viewport["height"]))
+        elif req.action == "navigate":
+            target = normalize_browser_url(req.value)
+            async with job.page_locks.setdefault(worker_id, asyncio.Lock()):
+                await page.goto(target, wait_until="domcontentloaded", timeout=30000)
+            worker = next((w for w in job.workers_list if w.id == worker_id), None)
+            if worker:
+                worker.url = page.url
+        elif req.action == "scroll":
+            await page.mouse.wheel(0, max(-3000, min(3000, int(req.value or "500"))))
+        elif req.action == "press":
+            await page.keyboard.press(req.value, timeout=7000)
+        else:
+            locator = element(query)
+            count = await locator.count()
+            if count != 1:
+                return JSONResponse({"ok": False, "error": f"Найдено элементов: {count}. Уточни запрос."}, status_code=400)
+            if req.action == "click":
+                await locator.click(timeout=7000)
+            elif req.action == "fill":
+                await locator.fill(req.value, timeout=7000)
+            elif req.action == "hover":
+                await locator.hover(timeout=7000)
+            else:
+                target = element(req.value.strip())
+                target_count = await target.count()
+                if target_count != 1:
+                    return JSONResponse({"ok": False, "error": f"Целей перетаскивания: {target_count}. Уточни запрос."}, status_code=400)
+                await locator.drag_to(target, timeout=7000)
+        job.screenshots.pop(worker_id, None)
+        log(f"worker {worker_id} action {req.action}")
+        return {"ok": True, "message": "Действие выполнено", "url": page.url}
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"Не удалось выполнить: {str(e)[:120]}"}, status_code=503)
+
 @app.get("/api/worker/{job_id}/{worker_id}/screenshot")
 async def worker_screenshot(job_id: str, worker_id: str, force: bool = False):
     job = JOBS.get(job_id)
@@ -459,4 +588,4 @@ app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8010)
+    uvicorn.run(app, host=os.environ.get("KATYA_BIND_HOST", "0.0.0.0"), port=8010)

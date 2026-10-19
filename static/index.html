@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Katya ViewBot — Панель сессий</title>
+<title>Katya Browser Lab — Управление вкладками</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -126,6 +126,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
 @keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
 .worker .st{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .st.watching{background:var(--green);box-shadow:0 0 8px var(--green-glow);animation:pulse 1.6s infinite}
+.st.ready{background:#75c6f4;box-shadow:0 0 8px rgba(117,198,244,.4)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
 .st.starting,.st.checking,.st.paused,.st.reloading{background:var(--amber);box-shadow:0 0 8px rgba(242,201,76,.4)}
 .st.error,.st.blocked{background:var(--red);box-shadow:0 0 8px rgba(255,100,110,.35)}
@@ -213,13 +214,18 @@ input::placeholder{color:#738198}.hint{font-size:11.5px;color:var(--txt3);line-h
 .worker{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:12px}
 .worker-preview{position:relative;grid-column:1/-1;aspect-ratio:16/9;max-height:270px;overflow:hidden;border:1px solid #354153;border-radius:10px;background:#090d14;display:grid;place-items:center;color:var(--txt3);font-size:12px}
 .worker-preview img{width:100%;height:100%;object-fit:contain;display:block}
+.worker-preview img{cursor:crosshair}
 .worker-preview .preview-note{position:absolute;inset:0;display:grid;place-items:center;background:#090d14;color:var(--txt3)}
 .worker-preview [hidden]{display:none}
 .worker-meta{display:flex;align-items:center;gap:12px;min-width:0}.worker-meta .act{min-width:0}.worker .secs{white-space:nowrap}
 .worker-actions{display:flex;gap:7px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.worker-actions button{padding:7px 9px;border-radius:8px;border:1px solid #465568;background:#1b2532;color:#d7e5f4;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-actions button:hover{border-color:var(--green)}.worker-actions button:disabled{opacity:.5;cursor:wait}
 .shot-time{position:absolute;right:8px;bottom:8px;padding:5px 7px;border-radius:6px;background:rgba(4,8,13,.8);color:#d9e8f7;font:11px 'JetBrains Mono',monospace}
 .advanced{margin-top:20px;border:1px solid #374354;border-radius:11px;background:#111722;padding:12px 14px}.advanced summary{cursor:pointer;font-size:12px;font-weight:800;color:var(--txt2)}.advanced textarea{width:100%;min-height:95px;resize:vertical;margin-top:12px;border-radius:9px;padding:10px;background:#0d121b;border:1px solid #465367;color:var(--txt);font:12px 'JetBrains Mono',monospace}.advanced .hint{margin-top:7px}
+.worker-control{grid-column:1/-1;border-top:1px solid #334050;padding-top:12px}.worker-control summary{cursor:pointer;color:#b9ef9e;font-size:12px;font-weight:800}.control-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.control-grid select,.control-grid input{min-width:0;width:100%;padding:10px 11px;border:1px solid #455267;border-radius:9px;background:#0c121c;color:#e3eef8;font:12px 'Manrope',sans-serif}.control-grid input:focus,.control-grid select:focus{outline:2px solid #83c667}.worker-action-run{margin-top:10px;padding:10px 15px;border:1px solid #8bcf6d;border-radius:9px;background:#263b29;color:#dfffd1;font:800 12px 'Manrope',sans-serif;cursor:pointer}.worker-action-run:disabled{opacity:.5}.control-help{font-size:11px;color:var(--txt3);margin-top:8px;line-height:1.5}.worker-url{grid-column:1/-1;color:#8192a8;font:11px 'JetBrains Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:#475567}
+.favorite-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.favorite-list button{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid #506054;border-radius:8px;background:#17241c;color:#c9eaba;padding:8px 10px;cursor:pointer;font:11px 'Manrope',sans-serif}
+@media(max-width:600px){.control-grid{grid-template-columns:1fr}.worker-actions{grid-column:1/-1;justify-content:flex-start}.worker-meta{grid-column:1/-1;flex-wrap:wrap}}
+.preview-tools{position:absolute;left:8px;bottom:8px;display:flex;gap:6px;z-index:2}.preview-tools button{border:1px solid #61758b;border-radius:7px;background:rgba(8,16,25,.88);color:#e8f6ff;padding:7px 9px;font:800 11px 'Manrope',sans-serif;cursor:pointer}.preview-tools button.on{border-color:#a8f278;background:#23442a;color:#e6ffd8}.worker-preview.pick img{cursor:crosshair}.worker-preview:not(.pick) img{cursor:default}.worker-control .recorder{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}.worker-control .recorder button{padding:8px 10px;border:1px solid #465568;border-radius:8px;background:#182230;color:#d7e5f4;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-control .recorder .recording{border-color:#ff8d93;color:#ffb8bc;background:#39222a}.recorded-steps{margin:10px 0 0;padding-left:22px;color:#b9c8d9;font:11px 'Manrope',sans-serif}.recorded-steps li{padding:4px 0}.recorded-steps:empty::before{content:'Пока нет записанных действий';color:#73849a}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.goal{align-items:stretch}.goal .pct{margin-left:0}.wrap{padding:22px 18px 45px}}
 @media(max-width:600px){header{align-items:flex-start}.brand h1{font-size:20px}.brand p{font-size:11px}.logo{width:48px;height:48px}.badge{font-size:10px;padding:9px 10px}.badge .dot{width:8px;height:8px}.goal{padding:24px}.goal .big{font-size:43px}.goal .pct{width:100%}.card{padding:20px}.totals{grid-template-columns:1fr 1fr}.tile:last-child{grid-column:span 2}.worker{flex-wrap:wrap}.worker .act{order:3;text-align:left;flex-basis:100%}}
 </style>
@@ -236,8 +242,8 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
         </svg>
       </div>
       <div>
-        <h1>Katya <span>ViewBot</span></h1>
-        <p>Мониторинг браузерных сессий</p>
+        <h1>Katya <span>Browser Lab</span></h1>
+        <p>Вкладки, снимки и действия в одном месте</p>
       </div>
     </div>
     <div class="badge"><span class="dot" id="connDot"></span><span id="connTxt">подключение…</span></div>
@@ -245,9 +251,9 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
 
   <div class="goal">
     <div>
-      <div class="lbl">Время воспроизведения</div>
+      <div class="lbl">Время воспроизведения видео</div>
       <div class="big"><span id="goalHours">0.000</span> <small>ч</small></div>
-      <div class="sub">Счётчик растёт, только когда видеоплеер движется. Это не часы просмотра, подтверждённые YouTube.</div>
+      <div class="sub">Если на странице есть видео, счётчик растёт только при воспроизведении. Это локальная диагностика, не статистика сайта.</div>
     </div>
     <div class="pct">
       <div class="activity-label">Сейчас открыто</div>
@@ -259,10 +265,10 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
   <div class="grid">
     <!-- CONTROL CARD -->
     <div class="card">
-      <h2>Запуск</h2>
-      <label>Ссылка на видео</label>
-      <input type="text" id="url" name="katya_video_link" autocomplete="off" autocapitalize="off" placeholder="https://youtu.be/xxxxxxxxx" spellcheck="false">
-      <div class="hint">Поддерживаются: youtu.be / youtube.com/watch?v= / shorts / embed</div>
+      <h2>Открыть вкладки</h2>
+      <label>Адрес страницы</label>
+      <input type="text" id="url" name="katya_browser_url" autocomplete="off" autocapitalize="off" placeholder="https://example.com" spellcheck="false">
+      <div class="hint">Любой полный http:// или https:// URL. Для YouTube можно вставить и короткую ссылку.</div>
 
       <label>Потоков (параллельных окон)</label>
       <div class="slider-row">
@@ -290,7 +296,7 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
 
     <!-- WORKERS CARD -->
     <div class="card">
-      <h2>Потоки</h2>
+      <h2>Вкладки ♡</h2>
       <div class="workers" id="workersPanel">
         <div class="empty">Нет активных вкладок.<br><b>После запуска состояние появится здесь.</b></div>
       </div>
@@ -318,21 +324,22 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
         <div class="system-foot"><span>RAM <b id="ramValue">0%</b></span><span>Chromium-процессов <b id="browserValue">0</b></span><span>Обновление каждые 2 с</span></div>
       </div>
       <div class="promo-kit">
-        <h3>Поделиться релизом</h3>
-        <p>Вставь ссылку на техно-видео слева — здесь можно быстро открыть ролик, скопировать ссылку или готовый текст для поста.</p>
+        <h3>Быстрые ссылки ♡</h3>
+        <p>Открой адрес на своём устройстве, скопируй или сохрани в избранное этого браузера.</p>
         <div class="promo-actions">
-          <button type="button" id="promoOpen">Открыть ролик ↗</button>
+          <button type="button" id="promoOpen">Открыть адрес ↗</button>
           <button type="button" id="promoLink">Копировать ссылку</button>
-          <button type="button" id="promoPost">Копировать текст поста</button>
+          <button type="button" id="promoFavorite">♡ Сохранить</button>
           <button type="button" id="promoShare">Поделиться</button>
         </div>
+        <div class="favorite-list" id="favoriteList"></div>
       </div>
     </div>
   </div>
 
   <div class="log" id="logBox"></div>
 
-  <footer>Katya <b>ViewBot</b> · локальный мониторинг · <span id="uptime">0</span> с открыто</footer>
+  <footer>Katya <b>Browser Lab</b> · Playwright Chromium · <span id="uptime">0</span> с открыто</footer>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -366,7 +373,7 @@ function toast(msg, type='ok'){
 
 async function start(){
   const url = $('url').value.trim();
-  if(!url){ toast('Вставь ссылку на видео','err'); return; }
+  if(!url){ toast('Вставь адрес страницы','err'); return; }
   let headers = {};
   try { headers = JSON.parse($('customHeaders').value.trim() || '{}'); if(!headers || Array.isArray(headers) || typeof headers !== 'object') throw Error(); }
   catch { toast('Заголовки должны быть JSON-объектом','err'); return; }
@@ -379,7 +386,7 @@ async function start(){
     });
     const j = await r.json();
     if(!j.ok) toast(j.error || 'Ошибка запуска','err');
-    else { toast('Поехали: ' + j.workers + ' потоков','ok'); curJob = j.id; }
+    else { toast('Открыто вкладок: ' + j.workers,'ok'); curJob = j.id; sessionStorage.setItem('katya_control_' + j.id, j.control_token); }
   }catch(e){ toast('Нет связи с ботом: '+e.message,'err'); }
   $('btnStart').disabled = false;
 }
@@ -392,7 +399,103 @@ async function stopAll(){
 $('btnStart').onclick = start;
 $('btnStop').onclick = stopAll;
 $('url').addEventListener('keydown', e => { if(e.key==='Enter') start(); });
+function updateActionFields(card){
+  const action = card.querySelector('.action-type').value;
+  const needsElement = ['click','fill','hover','drag'].includes(action);
+  const needsValue = ['fill','drag','scroll','press','navigate'].includes(action);
+  card.querySelector('.action-kind').hidden = !needsElement;
+  card.querySelector('.action-query').hidden = !needsElement;
+  card.querySelector('.action-value').hidden = !needsValue;
+  card.querySelector('.action-query').placeholder = 'Элемент: CSS, текст, роль или label';
+  card.querySelector('.action-value').placeholder = ({fill:'Текст для ввода',drag:'Цель перетаскивания (тем же способом поиска)',scroll:'Прокрутка в пикселях, например 500',press:'Клавиша, например Enter или Escape',navigate:'https://example.com'})[action] || '';
+  card.querySelector('.control-help').textContent = action === 'click' ? 'Можно также нажать прямо на скриншот. Для точного выбора укажи CSS, текст, роль или label.' : 'Действие выполняется только в этой вкладке. После него кадр обновится.';
+}
+
+function renderSteps(card){
+  const list=card.querySelector('.recorded-steps');
+  list.replaceChildren(...(card._steps||[]).map((step,i)=>{ const item=document.createElement('li'); item.textContent=`${i+1}. ${step.action} ${step.query||step.value||((step.x||0).toFixed(2)+', '+(step.y||0).toFixed(2))}`; return item; }));
+}
+async function runAction(card, payload, options={}){
+  const button = card.querySelector('.worker-stop');
+  const job = button.dataset.job, worker = button.dataset.worker;
+  const control_token = sessionStorage.getItem('katya_control_' + job);
+  if(!control_token){ toast('Управление доступно для вкладок, открытых в этой сессии','err'); return null; }
+  const run = card.querySelector('.worker-action-run');
+  run.disabled = true;
+  try{
+    const r = await fetch(`/api/worker/${encodeURIComponent(job)}/${encodeURIComponent(worker)}/action`,{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,control_token})
+    });
+    const data = await r.json();
+    if(!options.quiet) toast(data.ok ? (payload.action==='inspect' ? 'Элемент выбран' : 'Действие выполнено') : (data.error || 'Действие не выполнено'),data.ok ? 'ok' : 'err');
+    if(data.ok && card.dataset.recording==='1' && options.record!==false && payload.action!=='inspect'){
+      card._steps.push(payload); renderSteps(card);
+    }
+    if(data.ok && payload.action!=='inspect' && options.refresh!==false) setTimeout(() => { if(card.isConnected) loadShot(card,true); }, payload.action === 'navigate' ? 2500 : 800);
+    return data;
+  }catch(e){ if(!options.quiet) toast('Ошибка управления: ' + e.message,'err'); return null; }
+  finally{ run.disabled = false; }
+}
+
+$('workersPanel').addEventListener('change', e => {
+  if(e.target.matches('.action-type')) updateActionFields(e.target.closest('.worker'));
+});
 $('workersPanel').addEventListener('click', async e => {
+  if(e.target.matches('.preview-click,.preview-pick')){
+    const card=e.target.closest('.worker'), mode=e.target.matches('.preview-pick') ? 'pick' : 'click';
+    card.dataset.previewMode = card.dataset.previewMode===mode ? '' : mode;
+    card.querySelector('.worker-preview').classList.toggle('pick',!!card.dataset.previewMode);
+    card.querySelectorAll('.preview-tools button').forEach(b=>b.classList.toggle('on',card.dataset.previewMode===(b.matches('.preview-pick')?'pick':'click')));
+    toast(card.dataset.previewMode ? (mode==='pick' ? 'Нажми на элемент на кадре' : 'Нажми на кадр для клика') : 'Режим выключен');
+    return;
+  }
+  if(e.target.matches('.worker-preview img')){
+    const img = e.target, card = img.closest('.worker'), rect = img.getBoundingClientRect();
+    if(!card.dataset.previewMode) return;
+    const scale = Math.min(rect.width / img.naturalWidth, rect.height / img.naturalHeight);
+    const width = img.naturalWidth * scale, height = img.naturalHeight * scale;
+    const x = (e.clientX - rect.left - (rect.width-width)/2) / width;
+    const y = (e.clientY - rect.top - (rect.height-height)/2) / height;
+    if(x>=0 && x<=1 && y>=0 && y<=1){
+      if(card.dataset.previewMode==='pick'){
+        const data=await runAction(card,{action:'inspect',x,y},{record:false,refresh:false});
+        if(data?.ok){ card.querySelector('.worker-control').open=true; card.querySelector('.action-type').value='click'; card.querySelector('.action-kind').value='css'; card.querySelector('.action-query').value=data.selector; updateActionFields(card); }
+      }else runAction(card,{action:'point',x,y});
+    }
+    return;
+  }
+  if(e.target.matches('.record-toggle,.record-replay,.record-copy,.record-clear')){
+    const card=e.target.closest('.worker');
+    if(e.target.matches('.record-toggle')){
+      card.dataset.recording=card.dataset.recording==='1' ? '0' : '1';
+      e.target.classList.toggle('recording',card.dataset.recording==='1');
+      e.target.textContent=card.dataset.recording==='1' ? '■ Остановить запись' : '● Записать шаги';
+    }else if(e.target.matches('.record-clear')){
+      card._steps=[]; renderSteps(card);
+    }else if(e.target.matches('.record-copy')){
+      try{ await navigator.clipboard.writeText(JSON.stringify(card._steps||[],null,2)); toast('Шаги скопированы как JSON'); }catch{ toast('Не удалось скопировать','err'); }
+    }else{
+      const steps=[...(card._steps||[])]; if(!steps.length){ toast('Нет записанных шагов','err'); return; }
+      e.target.disabled=true;
+      let completed=0;
+      for(const step of steps){ const result=await runAction(card,step,{quiet:true,record:false,refresh:false}); if(!result?.ok) break; completed++; await new Promise(resolve=>setTimeout(resolve,500)); }
+      e.target.disabled=false; loadShot(card,true);
+      toast(completed===steps.length ? `Повторено шагов: ${completed}` : `Остановлено на шаге ${completed+1}`,completed===steps.length?'ok':'err');
+    }
+    return;
+  }
+  if(e.target.matches('.worker-action-run')){
+    const card = e.target.closest('.worker');
+    const kindValue = card.querySelector('.action-kind').value;
+    runAction(card,{
+      action:card.querySelector('.action-type').value,
+      kind:kindValue.startsWith('role:') ? 'role' : kindValue,
+      role:kindValue.startsWith('role:') ? kindValue.slice(5) : 'button',
+      query:card.querySelector('.action-query').value,
+      value:card.querySelector('.action-value').value
+    });
+    return;
+  }
   const button = e.target.closest('button[data-worker]');
   if(!button) return;
   const card = button.closest('.worker');
@@ -420,8 +523,9 @@ function loadShot(card, force=false){
 
 function promoUrl(){
   const raw = $('url').value.trim();
+  if(/^https?:\/\/[^\s/]+/i.test(raw)) return raw;
   const id = raw.match(/(?:youtu\.be\/|v=|\/videos\/|embed\/|shorts\/)([A-Za-z0-9_-]{11})/)?.[1] || (/^[A-Za-z0-9_-]{11}$/.test(raw) ? raw : null);
-  if(!id){ toast('Сначала вставь ссылку на YouTube-видео','err'); return null; }
+  if(!id){ toast('Сначала вставь адрес страницы','err'); return null; }
   return `https://www.youtube.com/watch?v=${id}`;
 }
 async function copyPromo(text, success){
@@ -430,8 +534,13 @@ async function copyPromo(text, success){
 }
 $('promoOpen').onclick = () => { const url=promoUrl(); if(url) window.open(url,'_blank','noopener,noreferrer'); };
 $('promoLink').onclick = () => { const url=promoUrl(); if(url) copyPromo(url,'Ссылка скопирована'); };
-$('promoPost').onclick = () => { const url=promoUrl(); if(url) copyPromo(`Новый техно-релиз уже на YouTube. Включай и делись впечатлениями: ${url}\n\n#techno #electronicmusic #newmusic`,'Текст поста скопирован'); };
-$('promoShare').onclick = async () => { const url=promoUrl(); if(!url) return; if(navigator.share){ try{ await navigator.share({title:'Техно-релиз',text:'Слушай новый техно-релиз:',url}); }catch{} }else{ copyPromo(url,'Ссылка скопирована'); } };
+function renderFavorites(){
+  let list=[]; try{ list=JSON.parse(localStorage.getItem('katya_favorites')||'[]'); }catch{}
+  $('favoriteList').replaceChildren(...list.map(url => { const button=document.createElement('button'); button.textContent='♡ '+url; button.title=url; button.onclick=()=>{ $('url').value=url; toast('Адрес выбран'); }; return button; }));
+}
+$('promoFavorite').onclick = () => { const url=promoUrl(); if(!url) return; let list=[]; try{ list=JSON.parse(localStorage.getItem('katya_favorites')||'[]'); }catch{}; list=[url,...list.filter(x=>x!==url)].slice(0,8); localStorage.setItem('katya_favorites',JSON.stringify(list)); renderFavorites(); toast('Ссылка сохранена'); };
+$('promoShare').onclick = async () => { const url=promoUrl(); if(!url) return; if(navigator.share){ try{ await navigator.share({title:'Ссылка',url}); }catch{} }else{ copyPromo(url,'Ссылка скопирована'); } };
+renderFavorites();
 
 function fmtH(s){ return (s/3600).toFixed(3); }
 function escapeHtml(value){ return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -488,18 +597,34 @@ function render(data){
       if(!card){
         card = document.createElement('div');
         card.className = 'worker'; card.dataset.id = w.id;
-        card.innerHTML = `<div class="worker-preview"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки" hidden><span class="shot-time">Ожидаю кадр…</span></div>
+        card.innerHTML = `<div class="worker-preview"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки" hidden><div class="preview-tools"><button type="button" class="preview-click">↖ Нажать</button><button type="button" class="preview-pick">⌕ Выбрать элемент</button></div><span class="shot-time">Ожидаю кадр…</span></div>
           <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
-          <div class="worker-actions"><button type="button" class="worker-shot">Обновить кадр</button><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>`;
+          <div class="worker-actions"><button type="button" class="worker-shot">Обновить кадр</button><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
+          <div class="worker-url"></div>
+          <details class="worker-control"><summary>Управление вкладкой · клик / ввод / перетаскивание</summary>
+            <div class="control-grid">
+              <select class="action-type" aria-label="Действие"><option value="click">Кликнуть</option><option value="fill">Ввести текст</option><option value="hover">Навести мышь</option><option value="drag">Перетащить</option><option value="scroll">Прокрутить</option><option value="press">Нажать клавишу</option><option value="navigate">Открыть URL</option></select>
+              <select class="action-kind" aria-label="Найти элемент"><option value="css">CSS selector</option><option value="text">Текст</option><option value="label">Label</option><option value="role:button">Роль: кнопка</option><option value="role:link">Роль: ссылка</option><option value="role:textbox">Роль: поле ввода</option><option value="role:checkbox">Роль: checkbox</option></select>
+              <input class="action-query" placeholder="Элемент: CSS, текст, роль или label" aria-label="Элемент">
+              <input class="action-value" placeholder="Значение" aria-label="Значение" hidden>
+            </div>
+            <div class="control-help"></div><button type="button" class="worker-action-run">Выполнить действие</button>
+            <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><button type="button" class="record-replay">▶ Повторить</button><button type="button" class="record-copy">Копировать шаги</button><button type="button" class="record-clear">Очистить</button></div>
+            <ol class="recorded-steps"></ol>
+          </details>`;
         const img = card.querySelector('img');
         img.onload = () => { img.hidden = false; card.querySelector('.preview-note').hidden = true; card.querySelector('.shot-time').textContent = 'Кадр ' + new Date().toLocaleTimeString('ru-RU'); };
         img.onerror = () => { card.querySelector('.shot-time').textContent = 'Кадр недоступен'; if(img.hidden) card.querySelector('.preview-note').textContent = 'Снимок пока недоступен'; };
         panel.append(card);
+        updateActionFields(card);
+        card._steps=[];
+        renderSteps(card);
       }
       card.querySelector('.st').className = 'st ' + w.state;
       card.querySelector('.name').textContent = 'W-' + w.id.split('-').pop();
       card.querySelector('.act').textContent = w.last_action || w.state;
       card.querySelector('.secs').textContent = (w.watch_seconds/3600).toFixed(3) + ' ч';
+      card.querySelector('.worker-url').textContent = w.url || w._j.url;
       card.querySelectorAll('.worker-actions button').forEach(button => { button.dataset.job = w._j.id; button.dataset.worker = w.id; });
       const bucket = Math.floor(Date.now()/20000);
       if(card.dataset.shotBucket !== String(bucket)) loadShot(card);

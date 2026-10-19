@@ -1,5 +1,5 @@
 [Unit]
-Description=Katya ViewBot - YouTube watch-time bot
+Description=Katya Browser Lab - Playwright dashboard
 After=network-online.target
 Wants=network-online.target
 
@@ -12,6 +12,7 @@ RestartSec=4
 MemoryHigh=2200M
 MemoryMax=2600M
 Environment=PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+Environment=KATYA_BIND_HOST=127.0.0.1
 
 [Install]
 WantedBy=multi-user.target
