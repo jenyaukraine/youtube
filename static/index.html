@@ -216,6 +216,9 @@ input::placeholder{color:#738198}.hint{font-size:11.5px;color:var(--txt3);line-h
 .worker-preview .preview-note{position:absolute;inset:0;display:grid;place-items:center;background:#090d14;color:var(--txt3)}
 .worker-preview [hidden]{display:none}
 .worker-meta{display:flex;align-items:center;gap:12px;min-width:0}.worker-meta .act{min-width:0}.worker .secs{white-space:nowrap}
+.worker-actions{display:flex;gap:7px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.worker-actions button{padding:7px 9px;border-radius:8px;border:1px solid #465568;background:#1b2532;color:#d7e5f4;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-actions button:hover{border-color:var(--green)}.worker-actions button:disabled{opacity:.5;cursor:wait}
+.shot-time{position:absolute;right:8px;bottom:8px;padding:5px 7px;border-radius:6px;background:rgba(4,8,13,.8);color:#d9e8f7;font:11px 'JetBrains Mono',monospace}
+.advanced{margin-top:20px;border:1px solid #374354;border-radius:11px;background:#111722;padding:12px 14px}.advanced summary{cursor:pointer;font-size:12px;font-weight:800;color:var(--txt2)}.advanced textarea{width:100%;min-height:95px;resize:vertical;margin-top:12px;border-radius:9px;padding:10px;background:#0d121b;border:1px solid #465367;color:var(--txt);font:12px 'JetBrains Mono',monospace}.advanced .hint{margin-top:7px}
 footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:#475567}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.goal{align-items:stretch}.goal .pct{margin-left:0}.wrap{padding:22px 18px 45px}}
 @media(max-width:600px){header{align-items:flex-start}.brand h1{font-size:20px}.brand p{font-size:11px}.logo{width:48px;height:48px}.badge{font-size:10px;padding:9px 10px}.badge .dot{width:8px;height:8px}.goal{padding:24px}.goal .big{font-size:43px}.goal .pct{width:100%}.card{padding:20px}.totals{grid-template-columns:1fr 1fr}.tile:last-child{grid-column:span 2}.worker{flex-wrap:wrap}.worker .act{order:3;text-align:left;flex-basis:100%}}
@@ -273,6 +276,11 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
         <button data-d="1800">30 мин</button>
         <button data-d="3600">1 час</button>
       </div>
+
+      <details class="advanced"><summary>HTTP-заголовки для новых вкладок</summary>
+        <textarea id="customHeaders" spellcheck="false" placeholder='{"Accept-Language":"ru-RU,ru;q=0.9"}'></textarea>
+        <div class="hint">Формат JSON. Применяются ко всем запросам новой вкладки. Токены, Cookie и Authorization сюда не вводи.</div>
+      </details>
 
       <div class="btn-row">
         <button class="btn btn-go" id="btnStart">Запустить</button>
@@ -359,12 +367,15 @@ function toast(msg, type='ok'){
 async function start(){
   const url = $('url').value.trim();
   if(!url){ toast('Вставь ссылку на видео','err'); return; }
+  let headers = {};
+  try { headers = JSON.parse($('customHeaders').value.trim() || '{}'); if(!headers || Array.isArray(headers) || typeof headers !== 'object') throw Error(); }
+  catch { toast('Заголовки должны быть JSON-объектом','err'); return; }
   $('btnStart').disabled = true;
   try{
     const r = await fetch('/api/start', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({url, workers:+wr.value, duration})
+      body: JSON.stringify({url, workers:+wr.value, duration, headers})
     });
     const j = await r.json();
     if(!j.ok) toast(j.error || 'Ошибка запуска','err');
@@ -382,15 +393,30 @@ $('btnStart').onclick = start;
 $('btnStop').onclick = stopAll;
 $('url').addEventListener('keydown', e => { if(e.key==='Enter') start(); });
 $('workersPanel').addEventListener('click', async e => {
-  const button = e.target.closest('.worker-stop');
+  const button = e.target.closest('button[data-worker]');
   if(!button) return;
+  const card = button.closest('.worker');
+  if(button.classList.contains('worker-shot')){ loadShot(card, true); return; }
   button.disabled = true;
   try {
-    const r = await fetch(`/api/worker/${encodeURIComponent(button.dataset.job)}/${encodeURIComponent(button.dataset.worker)}/stop`,{method:'POST'});
+    const action = button.classList.contains('worker-reload') ? 'reload' : 'stop';
+    const r = await fetch(`/api/worker/${encodeURIComponent(button.dataset.job)}/${encodeURIComponent(button.dataset.worker)}/${action}`,{method:'POST'});
     const data = await r.json();
-    toast(data.ok ? 'Вкладка закрыта' : (data.error || 'Не удалось закрыть вкладку'),data.ok ? 'ok' : 'err');
+    toast(data.ok ? (action === 'reload' ? 'Вкладка перезагружена' : 'Вкладка закрыта') : (data.error || 'Ошибка вкладки'),data.ok ? 'ok' : 'err');
+    if(data.ok && action === 'reload') loadShot(card, true);
   } catch { toast('Нет связи с сервером','err'); }
+  button.disabled = false;
 });
+
+function loadShot(card, force=false){
+  const img = card.querySelector('img');
+  const job = card.querySelector('[data-job]').dataset.job;
+  const worker = card.querySelector('[data-worker]').dataset.worker;
+  const now = Date.now();
+  card.dataset.shotBucket = String(Math.floor(now/20000));
+  card.querySelector('.shot-time').textContent = 'Обновляю…';
+  img.src = `/api/worker/${encodeURIComponent(job)}/${encodeURIComponent(worker)}/screenshot?force=${force ? 1 : 0}&t=${now}`;
+}
 
 function promoUrl(){
   const raw = $('url').value.trim();
@@ -462,25 +488,21 @@ function render(data){
       if(!card){
         card = document.createElement('div');
         card.className = 'worker'; card.dataset.id = w.id;
-        card.innerHTML = `<div class="worker-preview"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки" hidden></div>
+        card.innerHTML = `<div class="worker-preview"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки" hidden><span class="shot-time">Ожидаю кадр…</span></div>
           <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
-          <button type="button" class="worker-stop">Закрыть</button>`;
+          <div class="worker-actions"><button type="button" class="worker-shot">Обновить кадр</button><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>`;
         const img = card.querySelector('img');
-        img.onload = () => { img.hidden = false; card.querySelector('.preview-note').hidden = true; };
-        img.onerror = () => { if(img.hidden) card.querySelector('.preview-note').textContent = 'Снимок появится после загрузки видео'; };
+        img.onload = () => { img.hidden = false; card.querySelector('.preview-note').hidden = true; card.querySelector('.shot-time').textContent = 'Кадр ' + new Date().toLocaleTimeString('ru-RU'); };
+        img.onerror = () => { card.querySelector('.shot-time').textContent = 'Кадр недоступен'; if(img.hidden) card.querySelector('.preview-note').textContent = 'Снимок пока недоступен'; };
         panel.append(card);
       }
       card.querySelector('.st').className = 'st ' + w.state;
       card.querySelector('.name').textContent = 'W-' + w.id.split('-').pop();
       card.querySelector('.act').textContent = w.last_action || w.state;
       card.querySelector('.secs').textContent = (w.watch_seconds/3600).toFixed(3) + ' ч';
-      const button = card.querySelector('.worker-stop');
-      button.dataset.job = w._j.id; button.dataset.worker = w.id;
+      card.querySelectorAll('.worker-actions button').forEach(button => { button.dataset.job = w._j.id; button.dataset.worker = w.id; });
       const bucket = Math.floor(Date.now()/20000);
-      if(card.dataset.shotBucket !== String(bucket)){
-        card.dataset.shotBucket = String(bucket);
-        card.querySelector('img').src = `/api/worker/${encodeURIComponent(w._j.id)}/${encodeURIComponent(w.id)}/screenshot?t=${bucket}`;
-      }
+      if(card.dataset.shotBucket !== String(bucket)) loadShot(card);
     });
   }
 

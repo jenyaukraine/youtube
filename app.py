@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 import random
+import re
 import time
 import uuid
 from typing import Dict, List, Optional
@@ -57,6 +58,7 @@ class Job:
         self.stop_lock = asyncio.Lock()
         self.screenshots: Dict[str, tuple] = {}
         self.screenshot_locks: Dict[str, asyncio.Lock] = {}
+        self.page_locks: Dict[str, asyncio.Lock] = {}
 
     def total_watch(self):
         return sum(w.watch_seconds for w in self.workers_list)
@@ -215,7 +217,8 @@ async def worker_loop(job: Job, w: Worker, page: Page):
                         w.loop += 1
                         w.last_action = f"reload #{w.loop}"
                         w.state = "reloading"
-                        await page.reload(wait_until="domcontentloaded", timeout=60000)
+                        async with job.page_locks.setdefault(w.id, asyncio.Lock()):
+                            await page.reload(wait_until="domcontentloaded", timeout=60000)
                         await asyncio.sleep(random.uniform(1.5, 3.5))
                         w.state = "checking"
                         last_video_time = None
@@ -287,6 +290,7 @@ async def run_job(job: Job):
             # own context per worker => isolated cookies/account + UA
             ctx = await browser.new_context(
                 user_agent=w.ua,
+                extra_http_headers=job.headers,
                 viewport={"width": random.randint(1280, 1520), "height": random.randint(720, 900)},
                 locale=random.choice(["en-US", "ru-RU", "de-DE", "fr-FR"]),
                 device_scale_factor=1,
@@ -326,6 +330,7 @@ async def stop_job(job: Job):
         job.pages.clear()
         job.screenshots.clear()
         job.screenshot_locks.clear()
+        job.page_locks.clear()
         async with BROWSER_LOCK:
             browser = BROWSERS.pop(job.id, None)
             if browser:
@@ -346,6 +351,24 @@ class StartReq(BaseModel):
     workers: int = 3
     duration: int = 0          # 0 = until stopped
     cookies: str = ""           # raw cookie string (optional)
+    headers: Dict[str, str] = {}
+
+HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
+FORBIDDEN_HEADERS = {"authorization", "cookie", "proxy-authorization", "host", "content-length",
+                     "connection", "transfer-encoding", "upgrade", "set-cookie", "x-api-key",
+                     "api-key", "x-auth-token", "x-access-token"}
+
+def validate_headers(headers: Dict[str, str]) -> Optional[str]:
+    if len(headers) > 16:
+        return "Не больше 16 заголовков"
+    for name, value in headers.items():
+        if not isinstance(name, str) or not HEADER_NAME.fullmatch(name) or len(name) > 80:
+            return "Неверное имя HTTP-заголовка"
+        if name.lower() in FORBIDDEN_HEADERS or name.lower().startswith(("x-auth-", "x-token-")):
+            return f"Заголовок {name} здесь недоступен"
+        if not isinstance(value, str) or len(value) > 1024 or any(c in value for c in "\r\n\x00"):
+            return f"Неверное значение заголовка {name}"
+    return None
 
 def cookies_from_string(s: str) -> List[dict]:
     out = []
@@ -362,11 +385,15 @@ async def start(req: StartReq):
     vid = parse_video_id(req.url)
     if not vid:
         return JSONResponse({"ok": False, "error": "Не могу распознать YouTube-ссылку"}, status_code=400)
+    header_error = validate_headers(req.headers)
+    if header_error:
+        return JSONResponse({"ok": False, "error": header_error}, status_code=400)
     workers = max(1, min(int(req.workers), 8))
     duration = max(0, int(req.duration))
     jid = uuid.uuid4().hex[:8]
     cookies = cookies_from_string(req.cookies)
     job = Job(jid, f"https://www.youtube.com/watch?v={vid}", workers, duration, cookies)
+    job.headers = req.headers
     JOBS[jid] = job
     asyncio.create_task(run_job(job))
     log(f"NEW JOB {jid} url={job.url} workers={workers} duration={duration} cookies={'yes' if cookies else 'no'}")
@@ -401,6 +428,7 @@ async def stop_worker(job_id: str, worker_id: str):
     worker.last_action = "stopped by user"
     job.screenshots.pop(worker_id, None)
     job.screenshot_locks.pop(worker_id, None)
+    job.page_locks.pop(worker_id, None)
     try:
         await page.context.close()
     except Exception:
@@ -408,8 +436,28 @@ async def stop_worker(job_id: str, worker_id: str):
     log(f"worker {worker_id} stopped by user")
     return {"ok": True}
 
+@app.post("/api/worker/{job_id}/{worker_id}/reload")
+async def reload_worker(job_id: str, worker_id: str):
+    job = JOBS.get(job_id)
+    page = job.pages.get(worker_id) if job and job.status == "running" else None
+    worker = next((w for w in job.workers_list if w.id == worker_id), None) if job else None
+    if not page or not worker or page.is_closed():
+        return JSONResponse({"ok": False, "error": "Вкладка не найдена"}, status_code=404)
+    worker.state = "reloading"
+    worker.last_action = "Ручная перезагрузка страницы"
+    try:
+        async with job.page_locks.setdefault(worker_id, asyncio.Lock()):
+            await page.reload(wait_until="domcontentloaded", timeout=30000)
+        worker.state = "checking"
+        job.screenshots.pop(worker_id, None)
+        return {"ok": True}
+    except Exception as e:
+        worker.state = "checking"
+        worker.last_action = f"Перезагрузка: {str(e)[:60]}"
+        return JSONResponse({"ok": False, "error": "Не удалось перезагрузить вкладку"}, status_code=503)
+
 @app.get("/api/worker/{job_id}/{worker_id}/screenshot")
-async def worker_screenshot(job_id: str, worker_id: str):
+async def worker_screenshot(job_id: str, worker_id: str, force: bool = False):
     job = JOBS.get(job_id)
     if not job or job.status != "running" or worker_id not in job.pages:
         return JSONResponse({"error": "Вкладка не найдена"}, status_code=404)
@@ -419,14 +467,13 @@ async def worker_screenshot(job_id: str, worker_id: str):
     lock = job.screenshot_locks.setdefault(worker_id, asyncio.Lock())
     async with lock:
         cached = job.screenshots.get(worker_id)
-        if cached and time.monotonic() - cached[0] < 15:
+        if cached and time.monotonic() - cached[0] < (2 if force else 15):
             return Response(cached[1], media_type="image/jpeg", headers={"Cache-Control": "private, max-age=10"})
         page = job.pages.get(worker_id)
         if not page or page.is_closed():
             return JSONResponse({"error": "Вкладка закрыта"}, status_code=404)
         try:
-            # Capture only the public video player, excluding page chrome and account UI.
-            image = await page.locator("#movie_player").screenshot(type="jpeg", quality=45, timeout=6000)
+            image = await page.screenshot(type="jpeg", quality=50, timeout=8000, animations="disabled")
         except Exception:
             return JSONResponse({"error": "Снимок пока недоступен"}, status_code=503)
         job.screenshots[worker_id] = (time.monotonic(), image)
