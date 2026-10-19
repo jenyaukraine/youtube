@@ -354,7 +354,7 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
 
 <script>
 const $ = id => document.getElementById(id);
-let ws, wsAlive = false, curJob = null, tick = 0;
+let ws, wsAlive = false, curJob = null, tick = 0, activePreviewCard = null;
 const cpuSamples = [];
 window.addEventListener('pageshow', () => setTimeout(() => { if ($('url').value.trim().toLowerCase() === 'admin') $('url').value = ''; }, 100));
 
@@ -549,6 +549,7 @@ $('workersPanel').addEventListener('click', async e => {
         const data=await runAction(card,{action:'inspect',...point},{record:false,refresh:false});
         if(data?.ok){ card.querySelector('.worker-control').open=true; card.querySelector('.action-type').value='click'; card.querySelector('.action-kind').value='css'; card.querySelector('.action-query').value=data.selector; updateActionFields(card); }
       }else {
+        activePreviewCard=card;
         card.querySelector('.worker-preview').focus();
         sendPreviewInput(card,{action:'point',...point});
       }
@@ -626,15 +627,18 @@ document.addEventListener('keydown', e => {
   document.body.classList.remove('preview-expanded');
   preview.querySelector('.preview-expand').textContent='⛶ Развернуть';
 });
-$('workersPanel').addEventListener('keydown', e => {
+document.addEventListener('pointerdown', e => {
+  if(!e.target.closest('.worker-preview')) activePreviewCard=null;
+},true);
+document.addEventListener('keydown', e => {
   const preview=e.target.closest('.worker-preview');
-  if(!preview) return;
   if(e.target.matches('.preview-typebar input')){
     if(e.key==='Enter'){ e.preventDefault(); preview.querySelector('.preview-type-send').click(); }
     return;
   }
-  if(e.target!==preview) return;
-  const card=preview.closest('.worker');
+  if(e.target.closest('input,textarea,select,[contenteditable="true"]')) return;
+  const card=preview?.closest('.worker') || activePreviewCard;
+  if(!card?.isConnected) return;
   if(e.key.length===1 && !e.ctrlKey && !e.metaKey && !e.altKey){
     e.preventDefault(); queuePreviewText(card,e.key); return;
   }
@@ -646,10 +650,12 @@ $('workersPanel').addEventListener('keydown', e => {
     e.preventDefault(); pressPreviewKey(card,'ControlOrMeta+A');
   }
 });
-$('workersPanel').addEventListener('paste', e => {
-  if(!e.target.matches('.worker-preview')) return;
+document.addEventListener('paste', e => {
+  if(e.target.closest('input,textarea,[contenteditable="true"]')) return;
+  const card=e.target.closest('.worker-preview')?.closest('.worker') || activePreviewCard;
+  if(!card?.isConnected) return;
   const text=e.clipboardData?.getData('text/plain');
-  if(text){ e.preventDefault(); sendPreviewInput(e.target.closest('.worker'),{action:'type',value:text.slice(0,2048)}); }
+  if(text){ e.preventDefault(); sendPreviewInput(card,{action:'type',value:text.slice(0,2048)}); }
 });
 
 function loadShot(card, force=false){
