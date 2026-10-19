@@ -223,7 +223,7 @@ input::placeholder{color:#738198}.hint{font-size:11.5px;color:var(--txt3);line-h
 body.preview-expanded{overflow:hidden}
 .worker-preview .preview-note{position:absolute;inset:0;display:grid;place-items:center;background:#090d14;color:var(--txt3)}
 .worker-preview [hidden]{display:none}
-.worker-meta{display:flex;align-items:center;gap:12px;min-width:0}.worker-meta .act{min-width:0}.worker .secs{white-space:nowrap}
+.worker-meta{display:flex;align-items:center;gap:12px;min-width:0}.worker-meta .act{min-width:0}.worker .secs{white-space:nowrap}.focus-info{color:#b9ef9e;font-size:11px;font-weight:700}
 .worker-actions{display:flex;gap:7px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.worker-actions button{padding:7px 9px;border-radius:8px;border:1px solid #465568;background:#1b2532;color:#d7e5f4;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-actions button:hover{border-color:var(--green)}.worker-actions button:disabled{opacity:.5;cursor:wait}
 .shot-time{position:absolute;right:8px;bottom:8px;padding:5px 7px;border-radius:6px;background:rgba(4,8,13,.8);color:#d9e8f7;font:11px 'JetBrains Mono',monospace}
 .advanced{margin-top:20px;border:1px solid #374354;border-radius:11px;background:#111722;padding:12px 14px}.advanced summary{cursor:pointer;font-size:12px;font-weight:800;color:var(--txt2)}.advanced textarea{width:100%;min-height:95px;resize:vertical;margin-top:12px;border-radius:9px;padding:10px;background:#0d121b;border:1px solid #465367;color:var(--txt);font:12px 'JetBrains Mono',monospace}.advanced .hint{margin-top:7px}
@@ -498,6 +498,13 @@ async function runAction(card, payload, options={}){
     });
     const data = await r.json();
     if(!options.quiet) toast(data.ok ? (payload.action==='inspect' ? 'Элемент выбран' : 'Действие выполнено') : (data.error || 'Действие не выполнено'),data.ok ? 'ok' : 'err');
+    if(data.ok && Object.prototype.hasOwnProperty.call(data,'focus')){
+      const focus=card.querySelector('.focus-info');
+      const target=data.focus;
+      focus.textContent=target?.type==='password' ? 'Фокус: пароль' :
+        target?.tag==='input' || target?.tag==='textarea' || target?.tag==='select' ?
+        'Фокус: ' + (target.label || (target.type==='email' ? 'email' : 'поле ввода')) : 'Фокус: страница';
+    }
     if(data.ok && card.dataset.recording==='1' && options.record!==false && payload.action!=='inspect'){
       if(['type','fill'].includes(payload.action)){
         if(card._steps.at(-1)?.action !== payload.action){
@@ -888,7 +895,7 @@ function render(data){
         card = document.createElement('div');
         card.className = 'worker'; card.dataset.id = w.id;
         card.innerHTML = `<div class="worker-preview" tabindex="0"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми, выдели или прокрути" draggable="false" hidden><textarea class="preview-key-capture" aria-label="Клавиатура вкладки" autocomplete="off"></textarea><div class="preview-tools"><button type="button" class="preview-pick">⌕ Выбрать элемент</button></div><button type="button" class="preview-expand">⛶ Развернуть</button><span class="shot-time">Ожидаю кадр…</span></div>
-          <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
+          <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span><span class="focus-info" aria-live="polite"></span></div>
           <div class="worker-actions"><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
           <div class="worker-url"></div>
           <details class="worker-control"><summary>Управление вкладкой · клик / ввод / перетаскивание</summary>
