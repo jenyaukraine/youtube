@@ -403,7 +403,7 @@ $('workersPanel').addEventListener('click', async e => {
     const r = await fetch(`/api/worker/${encodeURIComponent(button.dataset.job)}/${encodeURIComponent(button.dataset.worker)}/${action}`,{method:'POST'});
     const data = await r.json();
     toast(data.ok ? (action === 'reload' ? 'Вкладка перезагружена' : 'Вкладка закрыта') : (data.error || 'Ошибка вкладки'),data.ok ? 'ok' : 'err');
-    if(data.ok && action === 'reload') loadShot(card, true);
+    if(data.ok && action === 'reload') setTimeout(() => { if(card.isConnected) loadShot(card, true); }, 2500);
   } catch { toast('Нет связи с сервером','err'); }
   button.disabled = false;
 });
