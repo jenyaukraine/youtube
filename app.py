@@ -786,8 +786,11 @@ async def list_macros():
 
 
 @app.post("/api/macros")
-async def save_macro(macro: Macro, x_katya_token: Optional[str] = Header(default=None)):
-    if not is_api_token(x_katya_token):
+async def save_macro(macro: Macro, x_katya_token: Optional[str] = Header(default=None),
+                     x_katya_job: Optional[str] = Header(default=None),
+                     x_katya_control_token: Optional[str] = Header(default=None)):
+    job = JOBS.get(x_katya_job or "")
+    if not is_api_token(x_katya_token) and not (job and authorized(job, x_katya_control_token or "", None)):
         return forbidden()
     for step in macro.steps:
         error = validate_step(step)

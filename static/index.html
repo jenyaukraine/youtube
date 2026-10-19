@@ -238,6 +238,13 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
 .worker-control .recorder .repeat-control button{margin-left:3px;border-color:#8491ca;background:#34406c;color:#edf0ff}
 .worker-control .recorder .repeat-control button:hover{background:#42518a}
 .worker-control .recorder .repeat-control button.running{border-color:#d2a468;background:#56412d;color:#ffe4bf}
+.worker-control .recorder{gap:5px;margin-top:10px}
+.worker-control .recorder>button,.worker-control .recorder .repeat-control button{padding:7px 9px;font-size:11px;line-height:1.2}
+.worker-control .recorder .macro-pick{max-width:190px;padding:7px 8px;font-size:11px}
+.worker-control .recorder .repeat-control{padding:3px 4px 3px 7px}
+.worker-control .recorder .repeat-control input{width:48px;min-height:28px}
+.scenario-save{max-width:430px}.scenario-save input{min-height:36px;padding:7px 10px}.scenario-save button{padding:7px 11px}
+.record-status{min-height:18px;margin-top:8px;color:#a6b8c8;font:11px 'Manrope',sans-serif}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.goal{align-items:stretch}.goal .pct{margin-left:0}.wrap{padding:22px 18px 45px}}
 @media(max-width:600px){header{align-items:flex-start}.brand h1{font-size:20px}.brand p{font-size:11px}.logo{width:48px;height:48px}.badge{font-size:10px;padding:9px 10px}.badge .dot{width:8px;height:8px}.goal{padding:24px}.goal .big{font-size:43px}.goal .pct{width:100%}.card{padding:20px}.totals{grid-template-columns:1fr 1fr}.tile:last-child{grid-column:span 2}.worker{flex-wrap:wrap}.worker .act{order:3;text-align:left;flex-basis:100%}}
 
@@ -519,6 +526,34 @@ function updateActionFields(card){
 function renderSteps(card){
   const list=card.querySelector('.recorded-steps');
   list.replaceChildren(...(card._steps||[]).map((step,i)=>{ const item=document.createElement('li'); item.textContent=`${i+1}. ${step.action} ${step.query||step.value||((step.x||0).toFixed(2)+', '+(step.y||0).toFixed(2))}`; return item; }));
+  const count=card._steps?.length||0;
+  card.querySelector('.record-status').textContent=card.dataset.recording==='1'
+    ? `● Запись идёт · ${count} шагов · действия на снимке сохраняются сразу`
+    : count ? `${count} шагов · черновик сохранён в этом браузере` : 'Записываются действия через снимок и панель вкладки.';
+}
+const DRAFT_STORE='katya_recording_drafts_v1';
+const SCENARIO_STORE='katya_scenarios_v1';
+function localList(key){try{const data=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(data)?data:[];}catch{return [];}}
+function draftUrl(card){return card._recordStartUrl||card.dataset.startUrl||card.querySelector('.worker-url').textContent||$('url').value.trim();}
+function persistDraft(card){
+  if(!card._steps?.length) return;
+  const item={key:card.dataset.id,startUrl:draftUrl(card),steps:card._steps.slice(0,200),updatedAt:Date.now()};
+  const items=localList(DRAFT_STORE).filter(old=>old.key!==item.key);
+  try{localStorage.setItem(DRAFT_STORE,JSON.stringify([item,...items].slice(0,30)));}catch{toast('Не удалось сохранить черновик в браузере','err');}
+  document.querySelectorAll('.macro-pick').forEach(fillMacroPick);
+}
+function forgetDraft(card){
+  const url=draftUrl(card);
+  try{localStorage.setItem(DRAFT_STORE,JSON.stringify(localList(DRAFT_STORE).filter(item=>item.key!==card.dataset.id && item.startUrl!==url)));}catch{}
+  document.querySelectorAll('.macro-pick').forEach(fillMacroPick);
+}
+function restoreDraft(card){
+  const items=localList(DRAFT_STORE),url=draftUrl(card);
+  const found=items.find(item=>item.key===card.dataset.id)||items.find(item=>item.startUrl===url);
+  if(!found?.steps?.length) return;
+  card._steps=found.steps.slice(0,200);
+  card._recordStartUrl=found.startUrl;
+  renderSteps(card);
 }
 async function runAction(card, payload, options={}){
   card._lastTouch=Date.now();
@@ -542,14 +577,19 @@ async function runAction(card, payload, options={}){
         const last=card._steps.at(-1);
         if(last?.action==='type' && card._lastRecordedInputType===inputType){
           if(!secret) last.value+=payload.value;
-        }else card._steps.push({...payload,value:secret?'{{password}}':payload.value,
-          replace:['input','textarea'].includes(data.input_focus?.tag)});
+        }else {
+          const focusIndex=card._steps.findLastIndex(step=>['point','click','fill'].includes(step.action));
+          const alreadyTyped=card._steps.slice(focusIndex+1).some(step=>step.action==='type');
+          card._steps.push({...payload,value:secret?'{{password}}':payload.value,
+            replace:['input','textarea'].includes(data.input_focus?.tag) && !alreadyTyped});
+        }
         card._lastRecordedInputType=inputType;
       }else{
         card._lastRecordedInputType=null;
         card._steps.push(payload.action==='fill' && data.input_focus?.type==='password' ? {...payload,value:'{{password}}'} : payload);
       }
       renderSteps(card);
+      persistDraft(card);
     }
     if(data.ok && payload.action!=='inspect' && options.refresh!==false){
       if(data.url) card.querySelector('.worker-url').textContent=data.url;
@@ -663,12 +703,15 @@ $('workersPanel').addEventListener('pointerup', e => {
 $('workersPanel').addEventListener('change', async e => {
   if(e.target.matches('.action-type')) updateActionFields(e.target.closest('.worker'));
   if(e.target.matches('.macro-pick') && e.target.value){
-    const card=e.target.closest('.worker'), name=e.target.value; e.target.value='';
-    const button=card.querySelector('.worker-stop'), job=button.dataset.job, worker=button.dataset.worker;
-    const control_token=sessionStorage.getItem('katya_control_'+job)||'';
-    const r=await apiFetch(`/api/macros/${encodeURIComponent(name)}/run`,{method:'POST',body:JSON.stringify({job_id:job,worker_id:worker,control_token})});
-    toast(r.ok ? `Макрос выполнен: ${r.completed} шагов` : (r.error||`Остановлено на шаге ${(r.completed||0)+1}`), r.ok?'ok':'err');
-    loadShot(card,true);
+    const card=e.target.closest('.worker'),choice=e.target.value; e.target.value='';
+    const source=choice.startsWith('scenario:')?localList(SCENARIO_STORE).find(s=>s.id===choice.slice(9))
+      :choice.startsWith('draft:')?localList(DRAFT_STORE).find(s=>s.key===choice.slice(6))
+      :MACROS.find(m=>m.name===choice.slice(6));
+    if(!source?.steps?.length){toast('Запись не найдена','err');return;}
+    card._steps=structuredClone(source.steps);
+    card._recordStartUrl=source.startUrl||card.dataset.startUrl;
+    renderSteps(card);persistDraft(card);
+    toast(`Загружено шагов: ${card._steps.length}. Нажми «Повторить» для запуска.`);
   }
 });
 $('workersPanel').addEventListener('keydown', e => {
@@ -709,6 +752,7 @@ $('workersPanel').addEventListener('click', async e => {
   }
   if(e.target.matches('.record-save')){
     const card=e.target.closest('.worker'), form=card.querySelector('.scenario-save');
+    if(!card._steps?.length){toast('Сначала включи запись и сделай действие на снимке','err');return;}
     form.hidden=!form.hidden;
     if(!form.hidden) form.querySelector('input').focus();
     return;
@@ -717,18 +761,19 @@ $('workersPanel').addEventListener('click', async e => {
     const card=e.target.closest('.worker'), name=card.querySelector('.scenario-name').value.trim();
     if(!name){ toast('Назови сценарий','err'); return; }
     if(!card._steps?.length){ toast('Сначала запиши хотя бы одно действие','err'); return; }
-    let saved=[];
-    try{ saved=JSON.parse(localStorage.getItem('katya_scenarios_v1')||'[]'); if(!Array.isArray(saved)) saved=[]; }catch{}
+    const saved=localList(SCENARIO_STORE);
     const id=crypto.randomUUID?.() || String(Date.now());
     saved.unshift({id,name,startUrl:card._recordStartUrl || card.querySelector('.worker-url').textContent,steps:card._steps,createdAt:new Date().toISOString()});
-    try{ localStorage.setItem('katya_scenarios_v1',JSON.stringify(saved.slice(0,50))); }
+    try{ localStorage.setItem(SCENARIO_STORE,JSON.stringify(saved.slice(0,50))); }
     catch{ toast('Не удалось сохранить сценарий','err'); return; }
     card.querySelector('.scenario-save').hidden=true;
-    if(apiToken()){
-      const r=await apiFetch('/api/macros',{method:'POST',body:JSON.stringify({name,steps:card._steps,description:'scenario'})});
-      toast(r.ok ? 'Сценарий сохранён локально и как макрос на сервере' : 'Сценарий сохранён локально; на сервере: '+(r.error||'ошибка'), r.ok?'ok':'err');
-      if(r.ok) loadMacros();
-    } else toast('Сценарий сохранён · открой раздел «Сценарии»');
+    document.querySelectorAll('.macro-pick').forEach(fillMacroPick);
+    const job=card.querySelector('.worker-stop').dataset.job;
+    const controlToken=sessionStorage.getItem('katya_control_'+job)||'';
+    const headers=controlToken?{'X-Katya-Job':job,'X-Katya-Control-Token':controlToken}:{};
+    const r=await apiFetch('/api/macros',{method:'POST',headers,body:JSON.stringify({name,steps:card._steps,description:'scenario'})});
+    toast(r.ok ? 'Сценарий сохранён на сервере' : 'Черновик сохранён в этом браузере; сервер: '+(r.error||'ошибка'), r.ok?'ok':'err');
+    if(r.ok) loadMacros();
     return;
   }
   if(e.target.matches('.record-toggle,.record-replay,.record-copy,.record-clear')){
@@ -738,8 +783,9 @@ $('workersPanel').addEventListener('click', async e => {
       if(card.dataset.recording==='1' && !card._steps?.length) card._recordStartUrl=card.querySelector('.worker-url').textContent || $('url').value.trim();
       e.target.classList.toggle('recording',card.dataset.recording==='1');
       e.target.textContent=card.dataset.recording==='1' ? '■ Остановить запись' : '● Записать шаги';
+      renderSteps(card);
     }else if(e.target.matches('.record-clear')){
-      card._steps=[]; card._inputVarCount=0; renderSteps(card);
+      forgetDraft(card);card._steps=[]; card._inputVarCount=0; renderSteps(card);
     }else if(e.target.matches('.record-copy')){
       try{ await navigator.clipboard.writeText(JSON.stringify(card._steps||[],null,2)); toast('Шаги скопированы как JSON'); }catch{ toast('Не удалось скопировать','err'); }
     }else{
@@ -982,7 +1028,7 @@ function render(data){
               <input class="action-value" placeholder="Значение" aria-label="Значение" hidden>
             </div>
             <div class="control-help"></div><button type="button" class="worker-action-run">Выполнить действие</button>
-            <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><div class="repeat-control"><input type="number" class="repeat-count" min="1" max="100" step="1" value="1" aria-label="Сколько раз повторить"><span>раз</span><button type="button" class="record-replay">▶ Повторить</button></div><button type="button" class="record-save">Сохранить сценарий</button><button type="button" class="record-copy">Копировать шаги</button><button type="button" class="record-clear">Очистить</button><select class="macro-pick" aria-label="Запустить макрос"><option value="">▶ Макрос…</option></select></div>
+            <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><div class="repeat-control"><input type="number" class="repeat-count" min="1" max="100" step="1" value="1" aria-label="Сколько раз повторить"><span>раз</span><button type="button" class="record-replay">▶ Повторить</button></div><button type="button" class="record-save">Сохранить сценарий</button><select class="macro-pick" aria-label="Выбрать сохранённую запись"><option value="">Загрузить запись…</option></select><button type="button" class="record-copy">Копировать шаги</button><button type="button" class="record-clear">Очистить</button></div><div class="record-status" aria-live="polite"></div>
             <div class="scenario-save" hidden><input class="scenario-name" maxlength="80" placeholder="Название сценария" aria-label="Название сценария"><button type="button" class="scenario-save-confirm">Сохранить</button></div>
             <ol class="recorded-steps"></ol>
           </details>`;
@@ -999,6 +1045,8 @@ function render(data){
       card.querySelector('.act').title = w.error || '';
       card.querySelector('.secs').textContent = (w.watch_seconds/3600).toFixed(3) + ' ч';
       card.querySelector('.worker-url').textContent = w.url || w._j.url;
+      card.dataset.startUrl=w._j.url;
+      if(!card._draftRestored){card._draftRestored=true;restoreDraft(card);}
       card.querySelectorAll('.worker-actions button').forEach(button => { button.dataset.job = w._j.id; button.dataset.worker = w.id; });
       if(!card._firstShot){ card._firstShot=true; loadShot(card,true); }
     });
@@ -1033,7 +1081,14 @@ async function loadMacros(){
     return item; }));
   document.querySelectorAll('.macro-pick').forEach(fillMacroPick);
 }
-function fillMacroPick(select){ const current=select.value; select.replaceChildren(new Option('▶ Макрос…',''),...MACROS.map(m=>new Option(m.name,m.name))); select.value=current; }
+function fillMacroPick(select){
+  const current=select.value;
+  const scenarios=localList(SCENARIO_STORE).filter(s=>s.steps?.length).map(s=>new Option(`Сценарий: ${s.name}`,`scenario:${s.id}`));
+  const drafts=localList(DRAFT_STORE).filter(s=>s.steps?.length).map(s=>new Option(`Черновик: ${s.startUrl||s.key}`,`draft:${s.key}`));
+  const macros=MACROS.map(m=>new Option(`Макрос: ${m.name}`,`macro:${m.name}`));
+  select.replaceChildren(new Option('Загрузить запись…',''),...scenarios,...drafts,...macros);
+  select.value=current;
+}
 async function loadFiles(){
   if(!apiToken()){ $('fileList').replaceChildren(); $('fileList').dataset.empty='Введи API-ключ, чтобы видеть файлы.'; return; }
   const r=await apiFetch('/api/files'); if(!r.ok){ $('fileList').replaceChildren(); $('fileList').dataset.empty=r.error||'Ошибка'; return; }
