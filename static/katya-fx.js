@@ -127,8 +127,11 @@
   function apply() {
     document.documentElement.classList.toggle('fx-on', enabled);
     canvas.style.display = enabled ? 'block' : 'none';
-    if (enabled && !document.hidden) start(); else stop();
-    if (enabled && reduced) { stop(); frame(performance.now()); }   // один статичный кадр
+    if (enabled && !document.hidden && !reduced) start(); else stop();
+    if (enabled && reduced && !document.hidden) {
+      frame(performance.now());
+      stop(); // frame() планирует следующий кадр; отменяем его в режиме reduced motion
+    }
     const b = document.getElementById('fxToggle'); if (b) { b.textContent = enabled ? '✦ Эффекты' : '✧ Эффекты выкл'; b.classList.toggle('on', enabled); }
   }
   document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); else if (enabled && !reduced) start(); });
