@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { startTabs } from '@/api/tabs';
 import { hasVariables, substituteVariables } from '@/lib/steps';
 import { isHttpUrl } from '@/lib/text';
@@ -14,6 +15,8 @@ interface Props {
 
 /** Редактор одного сценария: название, стартовая страница, шаги, переменные, запуск во вкладке. */
 export function ScenarioEditor({ scenario, onChange, onRemove }: Props) {
+  // Пароль живёт только до перезагрузки и никогда не сохраняется в сценарий.
+  const [password, setPassword] = useState('');
   const nameId = `scn-name-${scenario.id}`;
   const urlId = `scn-url-${scenario.id}`;
 
@@ -25,7 +28,7 @@ export function ScenarioEditor({ scenario, onChange, onRemove }: Props) {
       toast('Укажи стартовую страницу', 'err');
       return;
     }
-    const steps = substituteVariables(scenario.steps, scenario.variables);
+    const steps = substituteVariables(scenario.steps, { ...scenario.variables, password });
     if (hasVariables(steps)) {
       toast('Заполни переменные перед запуском', 'err');
       return;
@@ -74,7 +77,13 @@ export function ScenarioEditor({ scenario, onChange, onRemove }: Props) {
         </div>
       </div>
       <StepsSection steps={scenario.steps} onChange={changeSteps} />
-      <VariablesSection steps={scenario.steps} values={scenario.variables || {}} onChange={changeVariables} />
+      <VariablesSection
+        steps={scenario.steps}
+        values={scenario.variables || {}}
+        password={password}
+        onChange={changeVariables}
+        onPassword={setPassword}
+      />
     </>
   );
 }

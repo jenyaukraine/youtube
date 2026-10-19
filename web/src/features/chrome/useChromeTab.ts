@@ -6,7 +6,8 @@ import type { Step } from '@/lib/types';
 import { chromeBridge, type BridgeReply, type ChromeMedia, type ChromeTab } from './bridge';
 import { restoreExtensionDirectory } from './updater';
 
-export const REQUIRED_VERSION = '0.6.0';
+export const REQUIRED_VERSION = '0.6.1';
+const KEEP_VISIBLE_EVERY_MS = 10000;
 
 const STATUS_EVERY_MS = 4000;
 const FRAME_FAST_MS = 350;
@@ -50,6 +51,7 @@ export function useChromeTab(recorder: Recorder): ChromeTabApi {
   const tabRef = useRef<ChromeTab | null>(null);
   const shotBusy = useRef(false);
   const lastActivity = useRef(0);
+  const keepVisibleAt = useRef(0);
   const queue = useRef(Promise.resolve());
 
   const refreshStatus = useCallback(async () => {
@@ -95,7 +97,16 @@ export function useChromeTab(recorder: Recorder): ChromeTabApi {
       if (!document.hidden) {
         shot();
         chromeBridge('media').then(reply => {
-          if (alive) setMedia(reply.media || NO_MEDIA);
+          if (!alive) return;
+          setMedia(reply.media || NO_MEDIA);
+          // Скрытую вкладку Chrome просим эмулировать фокус, чтобы плеер не останавливался.
+          if (
+            reply.media?.visibility === 'hidden' &&
+            Date.now() - keepVisibleAt.current > KEEP_VISIBLE_EVERY_MS
+          ) {
+            keepVisibleAt.current = Date.now();
+            chromeBridge('keep-visible');
+          }
         });
       }
       const fast = recording || replaying || Date.now() - lastActivity.current < ACTIVITY_WINDOW_MS;

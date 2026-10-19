@@ -28,6 +28,7 @@ export async function startTabs(payload: StartPayload) {
 }
 
 export const stopJob = (job: string) => post(`/api/job/${enc(job)}/stop`);
+export const stopAll = () => post('/api/stop');
 export const stopWorker = (job: string, id: string) => post(worker(job, id) + '/stop');
 export const reloadWorker = (job: string, id: string) => post(worker(job, id) + '/reload');
 

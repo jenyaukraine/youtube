@@ -76,7 +76,9 @@ const VARIABLE = /{{\s*([a-zA-Z][\w]*)\s*}}/g;
 
 export function variablesOf(steps: Step[]): string[] {
   const found = new Set<string>();
-  for (const step of steps) for (const m of String(step.value || '').matchAll(VARIABLE)) found.add(m[1]);
+  for (const step of steps) {
+    for (const m of `${step.query || ''} ${step.value || ''}`.matchAll(VARIABLE)) found.add(m[1]);
+  }
   return [...found];
 }
 

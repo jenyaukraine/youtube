@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import type { Library } from '@/hooks/useLibrary';
 import { addLocalScenario, saveLocalScenarios } from '@/lib/storage';
+import { toast } from '@/lib/toast';
 import type { Macro, Scenario } from '@/lib/types';
 import { ScenarioEditor } from './ScenarioEditor';
 import { ScenarioList } from './ScenarioList';
 import './scenarios.css';
+
+const MAX_SCENARIOS = 50;
 
 /** Страница «Сценарии»: список слева, редактор шагов и переменных справа. */
 export function ScenariosPage({ library }: { library: Library }) {
@@ -17,7 +20,14 @@ export function ScenariosPage({ library }: { library: Library }) {
     refresh();
   };
 
+  const full = () => {
+    if (scenarios.length < MAX_SCENARIOS) return false;
+    toast(`Лимит: ${MAX_SCENARIOS} сценариев`, 'err');
+    return true;
+  };
+
   const create = () => {
+    if (full()) return;
     const created = addLocalScenario({ name: 'Новый сценарий', startUrl: 'https://', steps: [] });
     refresh();
     setSelected(created.id);
@@ -25,6 +35,7 @@ export function ScenariosPage({ library }: { library: Library }) {
 
   // Серверный макрос открывается как копия: правки не трогают оригинал.
   const copyMacro = (macro: Macro) => {
+    if (full()) return;
     const created = addLocalScenario({
       name: macro.name,
       startUrl: macro.start_url || 'https://',

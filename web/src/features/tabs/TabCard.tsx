@@ -27,6 +27,7 @@ export function TabCard({ job, worker, library }: Props) {
   const url = worker.url || job.url;
   const shortId = worker.id.split('-').pop();
   const state = worker.last_action || worker.state;
+  const tileState = worker.state === 'error' ? worker.error || state || 'Ошибка вкладки' : state;
 
   // Кадр и сценарий нужны друг другу: запрос кадра идёт через ref, чтобы не было цикла между хуками.
   const frameRequest = useRef<() => void>(() => {});
@@ -62,7 +63,12 @@ export function TabCard({ job, worker, library }: Props) {
   };
 
   return (
-    <div className={cx('tab', collapsed && 'tab-collapsed')} ref={cardRef} data-id={worker.id}>
+    <div
+      className={cx('tab', collapsed && 'tab-collapsed')}
+      ref={cardRef}
+      data-id={worker.id}
+      data-state={worker.state}
+    >
       <button
         type="button"
         className="tab-tile"
@@ -74,9 +80,13 @@ export function TabCard({ job, worker, library }: Props) {
           {live.frame ? <img src={live.frame} alt="" /> : <span>Ожидаю кадр…</span>}
         </span>
         <span className="tab-tile-info">
-          <strong>{hostOf(url) || `W-${shortId}`}</strong>
+          <strong>
+            {hostOf(url) || 'Вкладка'} <em>W-{shortId}</em>
+          </strong>
           <small>{url}</small>
-          <span className="tab-tile-state">{state}</span>
+          <span className="tab-tile-state" title={tileState}>
+            {tileState}
+          </span>
         </span>
         <span className="tab-tile-chevron" aria-hidden="true">
           ⌄

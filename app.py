@@ -69,6 +69,7 @@ if not BROWSER_CHANNEL and os.name == "nt":
         BROWSER_CHANNEL = "chrome"
 SCENARIO_START_DELAY = float(os.environ.get("KATYA_SCENARIO_DELAY", "1"))  # seconds between page load and first step
 MAX_WORKERS = max(1, min(int(os.environ.get("KATYA_MAX_TABS", "8")), 64))
+MAX_MEMORY_PERCENT = max(0, min(int(os.environ.get("KATYA_MAX_MEMORY_PERCENT", "90")), 100))
 os.makedirs(FILES_DIR, exist_ok=True)
 
 
@@ -275,6 +276,7 @@ class Job:
         self.headers: Dict[str, str] = {}
         self.steps: List[Step] = []     # run after load in every tab
         self.close_when_done = False    # close each tab 5 s after its start scenario finished or failed
+        self.launch_error = ""
         self.task: Optional[asyncio.Task] = None   # the run_job task; done once every tab is closed
         self.workers_list: List[Worker] = []
         self.status = "pending"         # pending|running|stopped
@@ -308,6 +310,7 @@ class Job:
             "workers_list": [w.snapshot() for w in self.workers_list],
             "scenario_steps": [public_step(step) for step in self.steps],
             "close_when_done": self.close_when_done,
+            "launch_error": self.launch_error,
         }
         if with_token:
             data["control_token"] = self.control_token
@@ -619,6 +622,12 @@ async def run_job(job: Job):
         for i in range(job.workers):
             if job.stop_flag:
                 break
+            memory = system_metrics()["memory_percent"]
+            if MAX_MEMORY_PERCENT and memory >= MAX_MEMORY_PERCENT:
+                job.launch_error = f"Открытие новых вкладок остановлено: память занята на {memory:g}%."
+                job.workers = len(job.workers_list)
+                log(f"job {job.id}: {job.launch_error}")
+                break
             profile = None
             if job.profile:
                 profile = find_profile(job.profile)
@@ -780,6 +789,21 @@ def validate_launch(url: str, headers: Dict[str, str], profile: str, steps: List
     return None
 
 
+def launch_capacity_error(workers: int) -> Optional[str]:
+    """Reserve capacity across all jobs before opening more browser contexts."""
+    active = sum(
+        sum(worker.state != "stopped" for worker in job.workers_list)
+        + max(0, job.workers - len(job.workers_list))
+        for job in JOBS.values() if job.status in ("pending", "running")
+    )
+    if active + workers > MAX_WORKERS:
+        return f"Сейчас открыто или запускается {active} вкладок. Общий лимит: {MAX_WORKERS}. Закройте часть вкладок."
+    memory = system_metrics()["memory_percent"]
+    if MAX_MEMORY_PERCENT and memory >= MAX_MEMORY_PERCENT:
+        return f"Память занята на {memory:g}%. Перед запуском новых вкладок освободите память."
+    return None
+
+
 def launch_job(url: str, *, workers: int = 1, duration: int = 0, cookies: Optional[List[dict]] = None,
                headers: Optional[Dict[str, str]] = None, user_agent_mode: str = "chrome",
                dialogs: str = "dismiss", profile: str = "", steps: Optional[List[Step]] = None,
@@ -787,6 +811,9 @@ def launch_job(url: str, *, workers: int = 1, duration: int = 0, cookies: Option
     """Create a job and start opening its tabs. Inputs must already be validated (validate_launch)."""
     url = normalize_url(url) or url
     workers = max(1, min(int(workers), MAX_WORKERS))
+    capacity_error = launch_capacity_error(workers)
+    if capacity_error:
+        raise ValueError(capacity_error)
     duration = max(0, int(duration))
     jid = uuid.uuid4().hex[:8]
     job = Job(jid, url, workers, duration, cookies or [], user_agent_mode, dialogs, profile)
@@ -805,9 +832,12 @@ async def start(req: StartReq):
     error = validate_launch(req.url, req.headers, req.profile, req.steps)
     if error:
         return JSONResponse({"ok": False, "error": error}, status_code=400)
-    job = launch_job(req.url, workers=req.workers, duration=req.duration, cookies=cookies_from_string(req.cookies),
-                     headers=req.headers, user_agent_mode=req.user_agent_mode, dialogs=req.dialogs,
-                     profile=req.profile, steps=req.steps)
+    try:
+        job = launch_job(req.url, workers=req.workers, duration=req.duration, cookies=cookies_from_string(req.cookies),
+                         headers=req.headers, user_agent_mode=req.user_agent_mode, dialogs=req.dialogs,
+                         profile=req.profile, steps=req.steps)
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=409)
     return {"ok": True, "id": job.id, "workers": job.workers,
             "worker_ids": [f"{job.id}-{i}" for i in range(job.workers)],
             "control_token": job.control_token}
@@ -1271,10 +1301,13 @@ async def run_scheduled_macro(schedule: Schedule) -> dict:
     error = validate_launch(url, settings["headers"], settings["profile"], steps)
     if error:
         return {"ok": False, "error": error, "completed": 0, "total": len(steps)}
-    job = launch_job(url, workers=schedule.workers, duration=0, headers=settings["headers"],
-                     user_agent_mode=settings["user_agent_mode"], dialogs=settings["dialogs"],
-                     profile=settings["profile"], steps=steps, close_when_done=True,
-                     origin=f"schedule={schedule.id} macro={schedule.macro_name!r}")
+    try:
+        job = launch_job(url, workers=schedule.workers, duration=0, headers=settings["headers"],
+                         user_agent_mode=settings["user_agent_mode"], dialogs=settings["dialogs"],
+                         profile=settings["profile"], steps=steps, close_when_done=True,
+                         origin=f"schedule={schedule.id} macro={schedule.macro_name!r}")
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc), "completed": 0, "total": len(steps)}
     # Page load, scenario (sum of step timeouts, waits included) and the 5 s grace before closing.
     budget = 90 + sum(step.timeout_ms for step in steps) / 1000
     budget += sum(float(step.value) / 1000 for step in steps if step.action == "wait" and step.value.isdigit())

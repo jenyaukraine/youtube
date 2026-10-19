@@ -52,12 +52,9 @@ export function ChromeWorkspace({ library, mode, onMode }: Props) {
         </div>
 
         {playerHidden && (
-          <div className="note info chrome-hidden">
-            <span>Вкладка скрыта — плеер может ждать активации</span>
-            <button type="button" className="btn btn-sm btn-accent" onClick={chrome.promote}>
-              Открыть отдельно
-            </button>
-          </div>
+          <p className="note info">
+            Вкладка скрыта — восстанавливаю её активность, чтобы видео не останавливалось.
+          </p>
         )}
 
         <ChromeFrame frame={chrome.frame} empty={emptyText} onInput={chrome.input} />

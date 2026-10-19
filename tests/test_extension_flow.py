@@ -73,9 +73,12 @@ def main():
             tabs = bridge(panel, "tabs")
             assert tabs["ok"], tabs
             entry = next(tab for tab in tabs["tabs"] if tab["url"] == fixture_url)
+            panel.bring_to_front()
             attached = bridge(panel, "attach", {"tabId": entry["id"]})
             assert attached["ok"], attached
             panel.bring_to_front()
+            assert bridge(panel, "keep-visible")["ok"]
+            assert bridge(panel, "media")["media"]["visibility"] == "visible"
             panel.evaluate("window.chromePanel.refresh()")
             point = bridge(panel, "execute", {"step": {"action": "point", "kind": "css", "query": "#gone", "x": 0.1, "y": 0.1}})
             assert point["ok"], point
@@ -88,6 +91,10 @@ def main():
             assert seek["ok"], seek
             target.wait_for_function("Math.abs(document.querySelector('video').currentTime - 3) < 0.5", timeout=5000)
             panel.wait_for_function("!document.querySelector('#chromeVideoControls').hidden", timeout=5000)
+            target.evaluate("document.querySelector('video').muted = true")
+            play = bridge(panel, "media-action", {"type": "play"})
+            assert play["ok"], play
+            target.wait_for_function("document.querySelector('video').currentTime > 3.2")
             assert panel.locator("#chromeScenarioMount .scenario-panel").count() == 1
             assert panel.evaluate("""() => BrowserCore.scenarioTemplate(true).replaceAll(/ id=\"chrome[A-Za-z]+\"/g, '') === BrowserCore.scenarioTemplate(false)""")
             assert panel.evaluate("""() => {
@@ -177,7 +184,8 @@ def main():
             panel.screenshot(path=str(Path(tempfile.gettempdir()) / "katya-unified-panel.png"), full_page=True)
             bundle_names = ("background.js", "bridge.js", "content.js", "manifest.json", "popup.html", "popup.js")
             bundle = {name: (ROOT / "chrome-extension" / name).read_text(encoding="utf-8") for name in bundle_names}
-            panel.route("**/api/extension-bundle", lambda route: route.fulfill(json={"ok": True, "version": "0.5.1", "files": bundle}))
+            bundle_version = json.loads(bundle["manifest.json"])["version"]
+            panel.route("**/api/extension-bundle", lambda route: route.fulfill(json={"ok": True, "version": bundle_version, "files": bundle}))
             panel.evaluate("""async () => {
               const root = await navigator.storage.getDirectory();
               const dir = await root.getDirectoryHandle('katya-updater-test', {create:true});
@@ -189,9 +197,9 @@ def main():
             }""")
             panel.evaluate("document.querySelector('.chrome-install').open = true; document.querySelector('#chromeSetup').hidden = false")
             panel.locator("#chromeUpdateExtension").click()
-            panel.wait_for_function("document.querySelector('#chromeUpdateStatus').textContent.includes('0.5.1')", timeout=10000)
+            panel.wait_for_function("version => document.querySelector('#chromeUpdateStatus').textContent.includes(version)", arg=bundle_version, timeout=10000)
             updated_version = panel.evaluate("""async () => JSON.parse(await (await (await window.__katyaTestDir.getFileHandle('manifest.json')).getFile()).text()).version""")
-            assert updated_version == "0.5.1", updated_version
+            assert updated_version == bundle_version, updated_version
             assert len(context.pages) >= 2
             print(json.dumps({"ok": True, "shared_scenario": True, "dom_first": True, "point_fallback": True, "resume_step": 2, "recording_persisted": True, "manual_action": True, "media_seek": True, "extension_update": True, "target_count": 4}))
         finally:

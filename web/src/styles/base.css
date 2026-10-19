@@ -427,6 +427,12 @@ details.fold[open] > summary {
   color: #ffd4d8;
 }
 
+.note.warn {
+  border-color: rgba(245, 199, 107, 0.4);
+  background: var(--warn-dim);
+  color: var(--txt-2);
+}
+
 .note.info {
   border-color: var(--info-line);
   background: var(--info-dim);

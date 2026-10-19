@@ -15,6 +15,8 @@ async function ensureDebugger(tabId) {
     await chrome.debugger.attach({tabId}, '1.3');
     await cdp(tabId, 'Page.enable');
   }
+  // Keep the attached page active while the dashboard is the foreground tab.
+  await cdp(tabId, 'Emulation.setFocusEmulationEnabled', {enabled: true});
   debugged.add(tabId);
 }
 async function releaseDebugger(tabId) {
@@ -82,6 +84,7 @@ async function attach(tabId, expectedUrl = '') {
   if (![tab.url, tab.pendingUrl, expectedUrl].some(allowedTab)) throw new Error('Эту страницу нельзя подключить. Войди в Google вручную и затем открой YouTube.');
   const previous = (await state()).targetId;
   if (previous !== tab.id) await releaseDebugger(previous);
+  await ensureDebugger(tab.id);
   await chrome.storage.session.set({targetId: tab.id, recording: false, events: []});
   return {ok: true, tab: {id: tab.id, title: tab.title, url: tab.url}};
 }
@@ -199,6 +202,13 @@ async function handle(command, payload = {}) {
     return {ok: true, tabs: tabs.filter(t => allowedTab(t.url || t.pendingUrl) && !PANEL_ORIGINS.has(new URL(t.url || t.pendingUrl).origin)).slice(0, 60).map(t => ({id: t.id, title: t.title, url: t.url || t.pendingUrl}))};
   }
   if (command === 'attach') return attach(Number(payload.tabId));
+  if (command === 'keep-visible') {
+    const tab = await targetTab();
+    if (!allowedTab(tab.url)) throw new Error('На этой странице фоновый режим недоступен.');
+    await ensureDebugger(tab.id);
+    await cdp(tab.id, 'Emulation.setFocusEmulationEnabled', {enabled: true});
+    return {ok: true};
+  }
   if (command === 'promote') {
     const tab = await targetTab();
     await releaseDebugger(tab.id);

@@ -337,3 +337,77 @@
     flex: 1;
   }
 }
+
+/* ---------- панель над сеткой: счётчик, фильтр, «Закрыть все» ---------- */
+.tabs-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+
+.tabs-count {
+  font-size: 12px;
+  color: var(--txt-2);
+}
+
+.tabs-count b {
+  color: var(--txt);
+}
+
+.tabs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-right: auto;
+}
+
+.tabs-filters .btn span {
+  font: 700 10px var(--mono);
+  color: var(--txt-3);
+}
+
+.tabs-filters .btn.on {
+  border-color: var(--info-line);
+  background: var(--info-dim);
+  color: var(--txt);
+}
+
+.tabs-filters .btn:last-child span {
+  color: var(--danger);
+}
+
+.card > .note {
+  margin-bottom: var(--s-3);
+}
+
+/* ---------- состояние вкладки на плитке ---------- */
+.tab-tile-info strong em {
+  margin-left: 6px;
+  font: 600 10px var(--mono);
+  font-style: normal;
+  color: var(--txt-3);
+}
+
+.tab[data-state='error'] .tab-tile,
+.tab[data-state='blocked'] .tab-tile {
+  border-color: var(--danger-line);
+}
+
+.tab[data-state='error'] .tab-tile-state,
+.tab[data-state='blocked'] .tab-tile-state {
+  color: var(--danger);
+}
+
+.tab[data-state='paused'] .tab-tile {
+  border-color: rgba(245, 199, 107, 0.4);
+}
+
+.tab[data-state='paused'] .tab-tile-state {
+  color: var(--warn);
+}
+
+.tab[data-state='ready'] .tab-tile-state {
+  color: var(--info);
+}

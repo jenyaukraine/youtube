@@ -30,7 +30,7 @@ export default function App() {
       ) : (
         <div className="grid">
           <StartForm jobs={state.jobs} library={library} mode={mode} onMode={changeMode} />
-          <TabsPanel jobs={state.jobs} library={library} />
+          <TabsPanel jobs={state.jobs} library={library} memoryPercent={state.system.memory_percent} />
         </div>
       )}
 
