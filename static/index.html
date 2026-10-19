@@ -89,6 +89,7 @@ input[type=text],input[type=password]{
   outline:none;transition:border-color .2s, box-shadow .2s;
 }
 input[type=text]:focus,input[type=password]:focus{border-color:var(--green2);box-shadow:0 0 0 3px var(--green-dim)}
+select#uaMode{width:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:10px;color:var(--txt);padding:11px 13px;font:600 13px 'Manrope',sans-serif}
 input::placeholder{color:var(--txt3)}
 .hint{font-size:11px;color:var(--txt3);margin-top:6px;line-height:1.5}
 
@@ -283,6 +284,10 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
         <button data-d="3600">1 час</button>
       </div>
 
+      <label for="uaMode">Профиль браузера для каждой вкладки</label>
+      <select id="uaMode" aria-label="Профиль браузера"><option value="random">Случайный Chrome или Edge</option><option value="browser">Обычный Chromium</option></select>
+      <div class="hint">Профиль выбирается при открытии вкладки. IP-адрес остаётся прежним.</div>
+
       <details class="advanced"><summary>HTTP-заголовки для новых вкладок</summary>
         <textarea id="customHeaders" spellcheck="false" placeholder='{"Accept-Language":"ru-RU,ru;q=0.9"}'></textarea>
         <div class="hint">Формат JSON. Применяются ко всем запросам новой вкладки. Токены, Cookie и Authorization сюда не вводи.</div>
@@ -382,7 +387,7 @@ async function start(){
     const r = await fetch('/api/start', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({url, workers:+wr.value, duration, headers})
+      body: JSON.stringify({url, workers:+wr.value, duration, headers, user_agent_mode:$('uaMode').value})
     });
     const j = await r.json();
     if(!j.ok) toast(j.error || 'Ошибка запуска','err');
@@ -401,14 +406,14 @@ $('btnStop').onclick = stopAll;
 $('url').addEventListener('keydown', e => { if(e.key==='Enter') start(); });
 function updateActionFields(card){
   const action = card.querySelector('.action-type').value;
-  const needsElement = ['click','fill','hover','drag'].includes(action);
+  const needsElement = ['click','wait_click','fill','hover','drag'].includes(action);
   const needsValue = ['fill','drag','scroll','press','navigate'].includes(action);
   card.querySelector('.action-kind').hidden = !needsElement;
   card.querySelector('.action-query').hidden = !needsElement;
   card.querySelector('.action-value').hidden = !needsValue;
   card.querySelector('.action-query').placeholder = 'Элемент: CSS, текст, роль или label';
   card.querySelector('.action-value').placeholder = ({fill:'Текст для ввода',drag:'Цель перетаскивания (тем же способом поиска)',scroll:'Прокрутка в пикселях, например 500',press:'Клавиша, например Enter или Escape',navigate:'https://example.com'})[action] || '';
-  card.querySelector('.control-help').textContent = action === 'click' ? 'Можно также нажать прямо на скриншот. Для точного выбора укажи CSS, текст, роль или label.' : 'Действие выполняется только в этой вкладке. После него кадр обновится.';
+  card.querySelector('.control-help').textContent = action === 'wait_click' ? 'Ждёт появления элемента до 2 минут и нажимает один раз.' : action === 'click' ? 'Можно также нажать прямо на скриншот. Для точного выбора укажи CSS, текст, роль или label.' : 'Действие выполняется только в этой вкладке. После него кадр обновится.';
 }
 
 function renderSteps(card){
@@ -603,7 +608,7 @@ function render(data){
           <div class="worker-url"></div>
           <details class="worker-control"><summary>Управление вкладкой · клик / ввод / перетаскивание</summary>
             <div class="control-grid">
-              <select class="action-type" aria-label="Действие"><option value="click">Кликнуть</option><option value="fill">Ввести текст</option><option value="hover">Навести мышь</option><option value="drag">Перетащить</option><option value="scroll">Прокрутить</option><option value="press">Нажать клавишу</option><option value="navigate">Открыть URL</option></select>
+              <select class="action-type" aria-label="Действие"><option value="click">Кликнуть</option><option value="wait_click">Ждать и кликнуть</option><option value="fill">Ввести текст</option><option value="hover">Навести мышь</option><option value="drag">Перетащить</option><option value="scroll">Прокрутить</option><option value="press">Нажать клавишу</option><option value="navigate">Открыть URL</option></select>
               <select class="action-kind" aria-label="Найти элемент"><option value="css">CSS selector</option><option value="text">Текст</option><option value="label">Label</option><option value="role:button">Роль: кнопка</option><option value="role:link">Роль: ссылка</option><option value="role:textbox">Роль: поле ввода</option><option value="role:checkbox">Роль: checkbox</option></select>
               <input class="action-query" placeholder="Элемент: CSS, текст, роль или label" aria-label="Элемент">
               <input class="action-value" placeholder="Значение" aria-label="Значение" hidden>

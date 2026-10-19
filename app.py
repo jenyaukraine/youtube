@@ -37,6 +37,7 @@ class Worker:
         return {
             "id": self.id,
             "url": self.url,
+            "user_agent": self.ua,
             "state": self.state,
             "watch_seconds": round(self.watch_seconds, 1),
             "loop": self.loop,
@@ -46,12 +47,13 @@ class Worker:
         }
 
 class Job:
-    def __init__(self, jid, url, workers, duration, cookies):
+    def __init__(self, jid, url, workers, duration, cookies, user_agent_mode="random"):
         self.id = jid
         self.url = url
         self.workers = workers
         self.duration = duration        # seconds a worker stays on the video (0 = until stopped)
         self.cookies = cookies          # shared cookie list for logged-in accounts
+        self.user_agent_mode = user_agent_mode
         self.workers_list: List[Worker] = []
         self.status = "pending"         # pending|running|stopped
         self.created = time.time()
@@ -251,14 +253,20 @@ async def run_job(job: Job):
         for i in range(job.workers):
             if job.stop_flag:
                 break
-            w = Worker(f"{job.id}-{i}", job.url, cookies=job.cookies)
+            profile = None
+            if job.user_agent_mode == "random":
+                names = [name for name in ("Desktop Chrome", "Desktop Edge") if name in pw.devices]
+                if names:
+                    profile = {key: value for key, value in pw.devices[secrets.choice(names)].items()
+                               if key != "default_browser_type"}
+            w = Worker(f"{job.id}-{i}", job.url, cookies=job.cookies,
+                       ua=profile.get("user_agent") if profile else None)
             job.workers_list.append(w)
-            # own context per worker => isolated cookies/account + UA
+            # Each tab has an isolated browser context and its own device profile.
             ctx = await browser.new_context(
+                **(profile or {}),
                 extra_http_headers=job.headers,
-                viewport={"width": 1365, "height": 768},
                 locale=locale,
-                device_scale_factor=1,
             )
             if job.cookies:
                 try:
@@ -322,6 +330,7 @@ class StartReq(BaseModel):
     duration: int = 0          # 0 = until stopped
     cookies: str = ""           # raw cookie string (optional)
     headers: Dict[str, str] = {}
+    user_agent_mode: Literal["random", "browser"] = "random"
 
 HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 FORBIDDEN_HEADERS = {"authorization", "cookie", "proxy-authorization", "host", "content-length",
@@ -362,7 +371,7 @@ async def start(req: StartReq):
     duration = max(0, int(req.duration))
     jid = uuid.uuid4().hex[:8]
     cookies = cookies_from_string(req.cookies)
-    job = Job(jid, url, workers, duration, cookies)
+    job = Job(jid, url, workers, duration, cookies, req.user_agent_mode)
     job.headers = req.headers
     JOBS[jid] = job
     asyncio.create_task(run_job(job))
@@ -434,7 +443,7 @@ async def reload_worker(job_id: str, worker_id: str):
         return JSONResponse({"ok": False, "error": "Не удалось перезагрузить вкладку"}, status_code=503)
 
 class BrowserAction(BaseModel):
-    action: Literal["click", "point", "inspect", "fill", "hover", "drag", "scroll", "press", "navigate"]
+    action: Literal["click", "wait_click", "point", "inspect", "fill", "hover", "drag", "scroll", "press", "navigate"]
     kind: Literal["css", "text", "role", "label"] = "css"
     query: str = ""
     role: str = "button"
@@ -457,7 +466,7 @@ async def browser_action(job_id: str, worker_id: str, req: BrowserAction):
     allowed_roles = {"button", "link", "checkbox", "radio", "tab", "menuitem", "textbox"}
     if req.kind == "role" and req.role not in allowed_roles:
         return JSONResponse({"ok": False, "error": "Неподдерживаемая роль"}, status_code=400)
-    if req.action in {"click", "fill", "hover", "drag"} and not query:
+    if req.action in {"click", "wait_click", "fill", "hover", "drag"} and not query:
         return JSONResponse({"ok": False, "error": "Укажи элемент"}, status_code=400)
     if req.action in {"drag", "press", "navigate"} and not req.value.strip():
         return JSONResponse({"ok": False, "error": "Укажи значение действия"}, status_code=400)
@@ -519,10 +528,12 @@ async def browser_action(job_id: str, worker_id: str, req: BrowserAction):
             await page.keyboard.press(req.value, timeout=7000)
         else:
             locator = element(query)
+            if req.action == "wait_click":
+                await locator.wait_for(state="visible", timeout=120000)
             count = await locator.count()
             if count != 1:
                 return JSONResponse({"ok": False, "error": f"Найдено элементов: {count}. Уточни запрос."}, status_code=400)
-            if req.action == "click":
+            if req.action in {"click", "wait_click"}:
                 await locator.click(timeout=7000)
             elif req.action == "fill":
                 await locator.fill(req.value, timeout=7000)
