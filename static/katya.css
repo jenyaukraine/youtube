@@ -475,7 +475,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var
 @media(max-width:900px){.wrap{padding:20px 18px 48px}.grid{grid-template-columns:1fr}.grid>.card:first-child{position:static}}
 @media(max-width:600px){
   .wrap{padding:16px 12px 42px}header{gap:14px}.brand{gap:10px}.logo{width:46px;height:46px;border-radius:13px}
-  .brand-eyebrow{font-size:8px}.brand h1{font-size:21px}.brand p{font-size:11px}
+  .brand-eyebrow{font-size:8px}.brand h1{font-size:21px}.brand p{font-size:11px}.header-actions{flex-wrap:wrap}
   .header-actions a,.fx-toggle,.badge{min-height:40px}
   .goal{padding:16px 18px;gap:14px}.goal>div:first-child{gap:7px}.goal .pct{padding-left:0;border-left:0}
   .card,.grid>.card,.auto-card{padding:18px;border-radius:17px}
@@ -507,3 +507,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var
 .step-grid .hint{margin-top:2px}
 .step{padding:14px 16px}
 .step .step-grid{margin-top:4px}
+.scenario-action[data-mode="done"]{border-color:rgba(143,227,162,.45);background:var(--accent-dim)}
+.scenario-action[data-mode="done"] .scenario-run{background:var(--accent);color:var(--accent-ink)}
+.scenario-action[data-mode="done"] .scenario-run:hover{background:#a3ecb3}
+.scenario-action[data-mode="done"] .scenario-action-t{color:var(--txt-2)}

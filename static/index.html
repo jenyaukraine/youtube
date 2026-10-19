@@ -349,7 +349,7 @@ select#startScenario{width:100%;background:var(--bg2);border:1px solid var(--lin
         <p>Вкладки, снимки и действия в одном месте</p>
       </div>
     </div>
-    <div class="header-actions"><a href="/scenarios.html">Сценарии ↗</a><div class="badge"><span class="dot" id="connDot"></span><span id="connTxt">подключение…</span></div></div>
+    <div class="header-actions"><a href="/extension.html">Мой Chrome ↗</a><a href="/scenarios.html">Сценарии ↗</a><div class="badge"><span class="dot" id="connDot"></span><span id="connTxt">подключение…</span></div></div>
   </header>
 
   <div class="goal">
@@ -613,7 +613,9 @@ function renderScenario(card,worker){
   const nowK=card.querySelector('.scenario-now-k'), nowT=card.querySelector('.scenario-now-t');
   if(running){ nowK.textContent=`Шаг ${cur+1} из ${steps.length}`; nowT.textContent=stepLabel(cur); }
   else if(status.phase==='error'){ nowK.textContent=`Ошибка на шаге ${cur+1}`; nowT.textContent=stepLabel(cur); }
-  else if(status.phase==='done'){ nowK.textContent='Выполнено'; nowT.textContent=`${steps.length} шагов · повторить можно кнопкой ▶ ниже`; }
+  else if(status.phase==='done'){ nowK.textContent='Сценарий выполнен'; nowT.textContent=`${steps.length} ${steps.length%10===1&&steps.length%100!==11?'шаг':steps.length%10>=2&&steps.length%10<=4&&(steps.length%100<10||steps.length%100>=20)?'шага':'шагов'}`;
+    if(card._scenarioPick==null && !card._replaying){ const bar=card.querySelector('.scenario-action'); bar.dataset.mode='done'; card.querySelector('.scenario-action-t').textContent='Повторить весь сценарий в этой вкладке'; card.querySelector('.scenario-run').textContent='▶ Повторить'; bar.hidden=false; } }
+  if(status.phase!=='done' && card.querySelector('.scenario-action').dataset.mode==='done'){ const bar=card.querySelector('.scenario-action'); delete bar.dataset.mode; bar.hidden=true; card.querySelector('.scenario-run').textContent='▶ Запустить отсюда'; }
   else if(status.phase==='waiting'){ nowK.textContent='Ожидание'; nowT.textContent=`страница грузится, первый шаг: ${stepLabel(0)}`; }
   else { nowK.textContent='Открывается страница'; nowT.textContent=stepLabel(0); }
   if(running && card._scenarioCur!==cur){ card._scenarioCur=cur; card.querySelector('.scenario-steps li.current')?.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'}); }
@@ -646,7 +648,7 @@ function updateScenarioPauseCountdown(card){
 }
 function clearScenarioPick(card){
   card._scenarioPick=null; card._playFrom=0; renderSteps(card);
-  card.querySelector('.scenario-action').hidden=true;
+  const bar=card.querySelector('.scenario-action'); bar.hidden=true; delete bar.dataset.mode; card.querySelector('.scenario-run').textContent='▶ Запустить отсюда';
   card.querySelectorAll('.scenario-steps li.picked').forEach(el=>el.classList.remove('picked'));
 }
 function renderClientProgress(card,index,total,phase){
@@ -965,6 +967,11 @@ $('workersPanel').addEventListener('click', async e => {
   }
   if(e.target.matches('.scenario-run')){
     const card=e.target.closest('.worker');
+    if(card._scenarioPick==null){
+      const job=card.querySelector('.worker-stop').dataset.job; let full=null; try{ full=JSON.parse(sessionStorage.getItem('katya_steps_'+job)||'null'); }catch{}
+      const base=(full?.length===(card._scenarioSteps||[]).length)?full:(card._scenarioSteps||[]);
+      card._steps=structuredClone(base.map(step=>({...step,value:step.action==='wait'&&!step.value&&step.duration_ms?String(step.duration_ms):(step.value||'')}))); card._playFrom=0; renderSteps(card);
+    }
     if(!card._steps?.length){ clearScenarioPick(card); return; }
     card.querySelector('.scenario-action').hidden=true;
     card.querySelector('.record-replay').click();

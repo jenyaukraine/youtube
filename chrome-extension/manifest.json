@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Katya Browser Bridge",
+  "version": "0.1.0",
+  "description": "Подключает выбранную вкладку Chrome к панели Katya Browser Lab.",
+  "permissions": ["tabs", "scripting", "storage", "activeTab"],
+  "host_permissions": ["<all_urls>"],
+  "background": {"service_worker": "background.js"},
+  "action": {"default_title": "Katya Browser Bridge", "default_popup": "popup.html"},
+  "content_scripts": [
+    {"matches": ["https://katya-dev.duckdns.org/*", "http://127.0.0.1/*", "http://localhost/*"], "js": ["bridge.js"], "run_at": "document_start"},
+    {"matches": ["http://*/*", "https://*/*"], "js": ["content.js"], "run_at": "document_start"}
+  ]
+}
