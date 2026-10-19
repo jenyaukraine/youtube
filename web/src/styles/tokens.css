@@ -1,0 +1,56 @@
+/* Katya Browser Lab — токены. Единственный источник цветов, радиусов, отступов и шрифтов. */
+:root {
+  color-scheme: dark;
+
+  --bg: #090c13;
+  --surface: #121725;
+  --surface-2: #171e2d;
+  --surface-3: #1f2838;
+  --line: #273145;
+  --line-2: #364358;
+
+  --txt: #f1f5fc;
+  --txt-2: #b8c4d6;
+  --txt-3: #7f8da4;
+
+  --accent: #9ff0bd;
+  --accent-ink: #082119;
+  --accent-dim: rgba(159, 240, 189, 0.12);
+  --accent-line: rgba(159, 240, 189, 0.45);
+
+  --info: #8ccbff;
+  --info-dim: rgba(140, 203, 255, 0.14);
+  --info-line: rgba(140, 203, 255, 0.5);
+
+  --warn: #f5c76b;
+  --warn-dim: rgba(245, 199, 107, 0.16);
+
+  --danger: #ff7a85;
+  --danger-ink: #2a0b0f;
+  --danger-dim: rgba(255, 122, 133, 0.14);
+  --danger-line: rgba(255, 122, 133, 0.45);
+
+  --violet: #b79bff;
+  --cyan: #80dcf3;
+
+  --font: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+
+  --r-s: 8px;
+  --r-m: 12px;
+  --r-l: 18px;
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+
+  --control-h: 38px;
+  --control-h-lg: 46px;
+
+  --shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
+  --focus: 0 0 0 3px rgba(128, 220, 243, 0.22);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}

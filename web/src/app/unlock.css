@@ -1,0 +1,177 @@
+.unlock {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 28px;
+  overflow: hidden;
+}
+
+.unlock-halo {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  z-index: -1;
+  width: min(720px, 95vw);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    circle,
+    rgba(100, 206, 171, 0.16) 0%,
+    rgba(91, 105, 221, 0.07) 38%,
+    transparent 70%
+  );
+  filter: blur(15px);
+  pointer-events: none;
+}
+
+.unlock-card {
+  width: min(430px, 100%);
+  padding: 40px 42px 35px;
+  border: 1px solid var(--accent-line);
+  border-radius: 26px;
+  background: linear-gradient(145deg, rgba(27, 35, 52, 0.96), rgba(13, 18, 30, 0.98));
+  box-shadow:
+    0 25px 100px rgba(0, 0, 0, 0.44),
+    0 0 70px rgba(109, 222, 172, 0.08),
+    inset 0 1px rgba(255, 255, 255, 0.08);
+  text-align: center;
+}
+
+.unlock-card h1 {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+}
+
+.unlock-card h1 span {
+  color: var(--accent);
+}
+
+.unlock-logo {
+  display: grid;
+  place-items: center;
+  width: 67px;
+  height: 67px;
+  margin: 0 auto 25px;
+  border: 1px solid var(--accent-line);
+  border-radius: 19px;
+  background: linear-gradient(150deg, rgba(143, 227, 162, 0.21), rgba(97, 92, 184, 0.19));
+  box-shadow: 0 0 32px rgba(143, 227, 162, 0.16);
+  color: var(--accent);
+}
+
+.unlock-logo svg {
+  width: 30px;
+  height: 30px;
+  stroke-width: 2.8;
+}
+
+.unlock-kicker {
+  margin-bottom: 9px;
+  color: var(--accent);
+  font: 700 10px var(--mono);
+  letter-spacing: 0.2em;
+}
+
+.unlock-copy {
+  margin: 11px 0 31px;
+  color: var(--txt-2);
+  font-size: 13px;
+}
+
+.unlock-pin {
+  position: relative;
+  height: 67px;
+  border: 1px solid var(--line-2);
+  border-radius: 13px;
+  background: rgba(8, 13, 23, 0.8);
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.unlock-pin:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.unlock-pin input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  text-align: center;
+  letter-spacing: 1em;
+}
+
+.unlock-pin input:focus {
+  box-shadow: none;
+}
+
+.unlock-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 21px;
+  height: 100%;
+  pointer-events: none;
+}
+
+.unlock-dots span {
+  width: 12px;
+  height: 12px;
+  border: 1px solid #688074;
+  border-radius: 50%;
+  background: rgba(143, 227, 162, 0.05);
+  transition:
+    background 0.12s,
+    box-shadow 0.12s,
+    transform 0.12s;
+}
+
+.unlock-dots span.filled {
+  background: var(--accent);
+  box-shadow: 0 0 15px rgba(143, 227, 162, 0.58);
+  transform: scale(1.1);
+}
+
+.unlock-error {
+  margin-top: 9px;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.unlock-card .btn-lg {
+  margin-top: 20px;
+  min-height: 52px;
+}
+
+.unlock-enter {
+  margin-top: 17px;
+  color: var(--txt-3);
+  font: 600 10px var(--mono);
+  text-align: center;
+}
+
+.unlock-checking {
+  padding: 25px 0;
+  color: var(--txt-2);
+  font-size: 13px;
+}
+
+@media (max-width: 480px) {
+  .unlock-card {
+    padding: 34px 24px 30px;
+  }
+
+  .unlock-card h1 {
+    font-size: 26px;
+  }
+}

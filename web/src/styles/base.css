@@ -1,0 +1,465 @@
+/* Сброс, типографика, формы, кнопки, карточки, раскладка. Стили фич лежат рядом с их компонентами. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(ellipse 70% 34% at 50% -16%, rgba(128, 89, 226, 0.18), transparent 80%),
+    radial-gradient(ellipse 42% 30% at 100% 16%, rgba(40, 169, 181, 0.08), transparent 85%), var(--bg);
+  color: var(--txt);
+  font: 500 14px/1.5 var(--font);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+h3 {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--txt-2);
+}
+
+a {
+  color: var(--info);
+}
+
+small {
+  font-size: 11px;
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+/* ---------- формы ---------- */
+label {
+  display: block;
+  margin: var(--s-4) 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--txt-3);
+}
+
+label:first-child {
+  margin-top: 0;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  color: inherit;
+}
+
+input:not([type='checkbox']):not([type='range']),
+select,
+textarea {
+  width: 100%;
+  min-height: var(--control-h-lg);
+  padding: 10px 13px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: var(--surface-3);
+  color: var(--txt);
+  font-size: 13px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+input:not([type='checkbox']):not([type='range']):focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: var(--focus);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--txt-3);
+}
+
+textarea {
+  min-height: 96px;
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+select {
+  appearance: none;
+  padding-right: 36px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--txt-3) 50%),
+    linear-gradient(135deg, var(--txt-3) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 50%,
+    calc(100% - 13px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--info);
+  cursor: pointer;
+}
+
+input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.hint {
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--txt-3);
+}
+
+/* ---------- кнопки ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--control-h);
+  padding: 0 14px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface-3);
+  color: var(--txt-2);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s,
+    transform 0.15s;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--txt-3);
+  color: var(--txt);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  border-color: transparent;
+  background: linear-gradient(110deg, #b8f9d2, #8ce9cf);
+  color: var(--accent-ink);
+  box-shadow: 0 8px 24px rgba(66, 214, 155, 0.18);
+}
+
+.btn-primary:hover:not(:disabled) {
+  color: var(--accent-ink);
+  filter: brightness(1.06);
+}
+
+.btn-accent {
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.btn-info {
+  border-color: var(--info-line);
+  background: var(--info-dim);
+  color: var(--info);
+}
+
+.btn-danger {
+  border-color: var(--danger-line);
+  background: var(--danger-dim);
+  color: var(--danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.btn-lg {
+  min-height: var(--control-h-lg);
+  padding: 0 20px;
+  border-radius: var(--r-m);
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+.btn-sm {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 11.5px;
+}
+
+.btn-icon {
+  width: var(--control-h);
+  padding: 0;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+/* ---------- сегментированный выбор ---------- */
+.seg {
+  display: flex;
+  gap: 6px;
+}
+
+.seg .btn {
+  flex: 1;
+  min-height: 40px;
+  padding: 0 8px;
+}
+
+.seg .btn.on {
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* ---------- карточки и секции ---------- */
+.card {
+  position: relative;
+  padding: var(--s-5);
+  border: 1px solid rgba(124, 145, 181, 0.22);
+  border-radius: var(--r-l);
+  background: linear-gradient(160deg, rgba(22, 29, 45, 0.97), rgba(14, 20, 33, 0.97));
+  box-shadow:
+    0 20px 52px rgba(0, 0, 0, 0.2),
+    inset 0 1px rgba(255, 255, 255, 0.035);
+}
+
+.card > h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: var(--s-5);
+}
+
+.card > h2::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow:
+    0 0 0 4px var(--accent-dim),
+    0 0 16px var(--accent-line);
+}
+
+.panel {
+  padding: var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface-2);
+}
+
+.empty {
+  padding: 48px 20px;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-m);
+  color: var(--txt-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+details.fold {
+  margin-top: var(--s-4);
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface-2);
+}
+
+details.fold > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--txt-2);
+}
+
+details.fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.fold > summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 14px;
+  color: var(--info);
+}
+
+details.fold[open] > summary::before {
+  content: '▾';
+}
+
+details.fold[open] > summary {
+  margin-bottom: var(--s-3);
+}
+
+/* ---------- раскладка ---------- */
+.wrap {
+  position: relative;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 30px clamp(20px, 3.5vw, 60px) 70px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 365px) minmax(0, 1fr);
+  gap: var(--s-5);
+  align-items: start;
+}
+
+.grid > .card:first-child {
+  position: sticky;
+  top: 18px;
+}
+
+/* ---------- статусы ---------- */
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--txt-3);
+}
+
+.dot.watching {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.dot.ready {
+  background: var(--info);
+  box-shadow: 0 0 0 3px var(--info-dim);
+}
+
+.dot.starting,
+.dot.checking,
+.dot.paused,
+.dot.reloading {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px var(--warn-dim);
+}
+
+.dot.error,
+.dot.blocked {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-dim);
+}
+
+.note {
+  padding: 9px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--txt-2);
+}
+
+.note.ok {
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.note.err {
+  border-color: var(--danger-line);
+  background: var(--danger-dim);
+  color: #ffd4d8;
+}
+
+.note.info {
+  border-color: var(--info-line);
+  background: var(--info-dim);
+  color: #e6f1ff;
+}
+
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+@media (max-width: 900px) {
+  .wrap {
+    padding: 20px 18px 48px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .grid > .card:first-child {
+    position: static;
+  }
+}
+
+@media (max-width: 600px) {
+  .wrap {
+    padding: 16px 12px 42px;
+  }
+
+  .card {
+    padding: 18px;
+  }
+}
