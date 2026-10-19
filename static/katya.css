@@ -83,7 +83,7 @@ button:disabled{opacity:.45;cursor:not-allowed;transform:none}
 .worker-control .recorder .record-save{border-color:rgba(143,227,162,.35);color:var(--accent)}
 .worker-control .recorder .record-copy,.worker-control .recorder .record-clear{background:transparent;color:var(--txt-3)}
 .worker-control .recorder .record-copy:hover,.worker-control .recorder .record-clear:hover{color:var(--txt)}
-.worker-control .recorder .record-copy{margin-left:auto}
+.worker-control .recorder .recorder-more{margin-left:auto}
 .worker-stop{background:transparent;border-color:var(--line-2);color:var(--txt-3)}
 .worker-stop:hover{border-color:var(--rec);color:var(--rec);background:var(--rec-dim)}
 .auto-item .ops button.danger{color:var(--txt-3)}.auto-item .ops button.danger:hover{border-color:var(--rec);color:var(--rec)}
@@ -305,3 +305,21 @@ label.btn{text-transform:none;letter-spacing:0;font-size:12px;color:var(--txt-2)
 .fx-toggle{display:inline-flex;align-items:center;min-height:34px;padding:0 12px;border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--surface-3);color:var(--txt-3);font:700 12px var(--font);cursor:pointer}
 .fx-toggle.on{color:var(--accent);border-color:rgba(143,227,162,.4);text-shadow:0 0 10px rgba(143,227,162,.6)}
 @media(prefers-reduced-motion:reduce){.fx-on .btn-go,.fx-on .worker,.fx-on .auto-item{animation:none}}
+
+/* ---------- 14. Рекордер: выбор шага, меню «ещё», иконка очистки ---------- */
+.recorded-steps li{cursor:pointer;transition:border-color .15s,background .15s}
+.recorded-steps li:hover{border-color:var(--txt-3)}
+.recorded-steps li.skipped{opacity:.45}
+.recorded-steps li.from{border-color:rgba(127,184,255,.6);background:rgba(127,184,255,.1);color:var(--txt)}
+.recorded-steps li.from::before{content:'▶';background:var(--info);color:#071424}
+.scenario-steps li{cursor:pointer;transition:border-color .15s,color .15s}
+.scenario-steps li:hover{border-color:var(--info);color:#e6f1ff}
+.recorder-more{position:relative}
+.recorder-more summary{list-style:none;display:inline-flex;align-items:center;justify-content:center;min-width:34px;min-height:34px;padding:0 10px;border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--surface-3);color:var(--txt-2);font:800 14px/1 var(--font);cursor:pointer;letter-spacing:.1em}
+.recorder-more summary::-webkit-details-marker{display:none}
+.recorder-more summary:hover,.recorder-more[open] summary{border-color:var(--txt-3);color:var(--txt)}
+.recorder-menu{position:absolute;top:40px;right:0;z-index:6;display:flex;flex-direction:column;gap:2px;min-width:230px;padding:6px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:var(--r-s);box-shadow:var(--shadow)}
+.worker-control .recorder .recorder-menu button{justify-content:flex-start;width:100%;border-color:transparent;background:transparent;color:var(--txt-2)}
+.worker-control .recorder .recorder-menu button:hover{background:var(--surface-3);color:var(--txt)}
+.worker-control .recorder .record-clear.icon{min-width:34px;padding:0;background:transparent;border-color:transparent;color:var(--txt-3);font-size:14px;opacity:.55}
+.worker-control .recorder .record-clear.icon:hover{opacity:1;color:var(--rec);border-color:transparent}

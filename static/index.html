@@ -551,7 +551,9 @@ function updateActionFields(card){
 
 function renderSteps(card){
   const list=card.querySelector('.recorded-steps');
-  list.replaceChildren(...(card._steps||[]).map((step,i)=>{ const item=document.createElement('li'); item.textContent=step.action==='wait'?`Пауза ${(Number(step.value)/1000).toFixed(1)} с`:`${step.action} ${step.query||step.value||((step.x||0).toFixed(2)+', '+(step.y||0).toFixed(2))}`; return item; }));
+  const from=card._playFrom||0;
+  list.replaceChildren(...(card._steps||[]).map((step,i)=>{ const item=document.createElement('li'); item.dataset.index=i; item.title=i===from&&from?'Повтор начнётся отсюда · нажми, чтобы снять':'Нажми — повторять с этого шага'; item.classList.toggle('from',i===from&&from>0); item.classList.toggle('skipped',i<from); item.textContent=step.action==='wait'?`Пауза ${(Number(step.value)/1000).toFixed(1)} с`:`${ACTION_LABELS[step.action]||step.action} ${step.query||step.value||((step.x||0).toFixed(2)+', '+(step.y||0).toFixed(2))}`; return item; }));
+  const rb=card.querySelector('.record-replay'); if(rb && !card._replaying) rb.textContent=from>0?`▶ С шага ${from+1}`:'▶ Повторить';
   const count=card._steps?.length||0;
   card.querySelector('.record-status').textContent=card.dataset.recording==='1'
     ? `● Запись идёт · ${count} шагов · паузы между действиями сохраняются`
@@ -560,13 +562,14 @@ function renderSteps(card){
 const ACTION_LABELS={scroll:'Прокрутка',point:'Клик',type:'Ввод',press:'Клавиша',click:'Клик',fill:'Заполнение',wait:'Пауза',navigate:'Переход',screenshot:'Снимок',mouse_drag:'Перетаскивание'};
 function renderScenario(card,worker){
   const pane=card.querySelector('.scenario-progress'),steps=worker._j.scenario_steps||[],status=worker.scenario||{};
+  card._scenarioSteps=steps;
   pane.hidden=!steps.length;
   if(!steps.length) return;
   if(card._scenarioId!==worker._j.id){
     card._scenarioId=worker._j.id;
     card.querySelector('.scenario-steps').replaceChildren(...steps.map((step,index)=>{
       const label=step.action==='wait'?`Пауза ${(Number(step.duration_ms)/1000).toFixed(1)} с`:(step.name||ACTION_LABELS[step.action]||step.action);
-      const li=document.createElement('li'); li.textContent=`${index+1}. ${label}`; return li;
+      const li=document.createElement('li'); li.textContent=`${index+1}. ${label}`; li.title='Нажми — загрузить сценарий в запись и повторять с этого шага'; return li;
     }));
   }
   pane.classList.toggle('error',status.phase==='error');
@@ -840,6 +843,23 @@ $('workersPanel').addEventListener('click', async e => {
     toast(r.ok?`Сохранено на сервере: ${name}`:`Сохранено только в этом браузере; сервер: ${r.error||'ошибка'}`,r.ok?'ok':'err');
     return;
   }
+  if(e.target.closest('.recorded-steps li')){
+    const li=e.target.closest('li'), card=li.closest('.worker'), i=+li.dataset.index;
+    card._playFrom=(card._playFrom||0)===i?0:i; renderSteps(card);
+    toast(card._playFrom?`Повтор начнётся с шага ${i+1}`:'Повтор с начала'); return;
+  }
+  if(e.target.closest('.scenario-steps li')){
+    const li=e.target.closest('li'), card=li.closest('.worker'), i=[...li.parentNode.children].indexOf(li);
+    const steps=(card._scenarioSteps||[]).map(step=>({...step,value:step.action==='wait'&&!step.value&&step.duration_ms?String(step.duration_ms):(step.value||'')}));
+    if(!steps.length){ toast('Шаги сценария ещё не получены','err'); return; }
+    card._steps=structuredClone(steps); card._playFrom=i; card.querySelector('.worker-control').open=true;
+    renderSteps(card); persistDraft(card);
+    card.querySelector('.recorder').scrollIntoView({behavior:'smooth',block:'nearest'});
+    toast(`Сценарий загружен в запись · старт с шага ${i+1}. Нажми ▶`); return;
+  }
+  if(e.target.matches('.record-unselect')){
+    const card=e.target.closest('.worker'); card._playFrom=0; renderSteps(card); e.target.closest('.recorder-more').removeAttribute('open'); return;
+  }
   if(e.target.matches('.record-toggle,.record-replay,.record-copy,.record-clear')){
     const card=e.target.closest('.worker');
     if(e.target.matches('.record-toggle')){
@@ -850,9 +870,10 @@ $('workersPanel').addEventListener('click', async e => {
       e.target.textContent=card.dataset.recording==='1' ? '■ Остановить запись' : '● Записать шаги';
       renderSteps(card);
     }else if(e.target.matches('.record-clear')){
-      forgetDraft(card);card._steps=[]; card._inputVarCount=0; card._recordLastFinishedAt=Date.now(); renderSteps(card);
+      forgetDraft(card);card._steps=[]; card._playFrom=0; card._inputVarCount=0; card._recordLastFinishedAt=Date.now(); renderSteps(card);
     }else if(e.target.matches('.record-copy')){
       try{ await navigator.clipboard.writeText(JSON.stringify(card._steps||[],null,2)); toast('Шаги скопированы как JSON'); }catch{ toast('Не удалось скопировать','err'); }
+      e.target.closest('.recorder-more')?.removeAttribute('open');
     }else{
       if(card._replaying){ card._cancelReplay=true; e.target.disabled=true; e.target.textContent='Останавливаю…'; return; }
       const steps=[...(card._steps||[])]; if(!steps.length){ toast('Нет записанных шагов','err'); return; }
@@ -867,7 +888,7 @@ $('workersPanel').addEventListener('click', async e => {
       let completedRuns=0, failedStep=0;
       try {
         for(let run=0;run<repeats && !card._cancelReplay && card.isConnected;run++){
-          for(let i=0;i<steps.length;i++){
+          for(let i=Math.min(card._playFrom||0,steps.length-1);i<steps.length;i++){
             if(card._cancelReplay || !card.isConnected) break;
             const result=await runAction(card,steps[i],{quiet:true,record:false,refresh:false});
             if(!result?.ok){ failedStep=i+1; break; }
@@ -879,7 +900,7 @@ $('workersPanel').addEventListener('click', async e => {
         }
       } finally {
         card._replaying=false; countInput.disabled=false; e.target.disabled=false;
-        e.target.classList.remove('running'); e.target.textContent='▶ Повторить';
+        e.target.classList.remove('running'); e.target.textContent=(card._playFrom||0)>0?`▶ С шага ${card._playFrom+1}`:'▶ Повторить';
         if(card.isConnected) loadShot(card,true);
       }
       if(failedStep) toast(`Сбой на повторе ${completedRuns+1}, шаг ${failedStep}`,'err');
@@ -1087,7 +1108,7 @@ function render(data){
           <div class="worker-actions"><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
           <div class="worker-url"></div>
           <details class="worker-control" open><summary>Запись шагов и сценарии</summary>
-            <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><div class="repeat-control"><input type="number" class="repeat-count" min="1" max="100" step="1" value="1" aria-label="Сколько раз повторить"><span>раз</span><button type="button" class="record-replay">▶ Повторить</button></div><button type="button" class="record-save">💾 Сохранить сценарий</button><select class="macro-pick" aria-label="Выбрать сохранённую запись"><option value="">Загрузить запись…</option></select><button type="button" class="record-copy">Копировать шаги</button><button type="button" class="record-clear">Очистить</button></div><div class="record-status" aria-live="polite"></div>
+            <div class="recorder"><button type="button" class="record-toggle">● Записать шаги</button><div class="repeat-control"><input type="number" class="repeat-count" min="1" max="100" step="1" value="1" aria-label="Сколько раз повторить"><span>раз</span><button type="button" class="record-replay">▶ Повторить</button></div><button type="button" class="record-save">💾 Сохранить</button><select class="macro-pick" aria-label="Открыть сценарий"><option value="">Открыть сценарий…</option></select><details class="recorder-more"><summary title="Ещё">⋯</summary><div class="recorder-menu"><button type="button" class="record-copy">Копировать шаги как JSON</button><button type="button" class="record-unselect">Повторять с начала</button></div></details><button type="button" class="record-clear icon" title="Очистить запись" aria-label="Очистить запись">🗑</button></div><div class="record-status" aria-live="polite"></div>
             <ol class="recorded-steps"></ol>
             <details class="manual-action"><summary>Ручное действие по селектору · для точной настройки</summary>
             <div class="control-grid">
@@ -1165,7 +1186,7 @@ function fillMacroPick(select){
   const scenarios=localList(SCENARIO_STORE).filter(s=>s.steps?.length).map(s=>new Option(`Сценарий: ${s.name}`,`scenario:${s.id}`));
   const drafts=localList(DRAFT_STORE).filter(s=>s.steps?.length).map(s=>new Option(`Черновик: ${s.startUrl||s.key}`,`draft:${s.key}`));
   const macros=MACROS.map(m=>new Option(`Макрос: ${m.name}`,`macro:${m.name}`));
-  select.replaceChildren(new Option('Загрузить запись…',''),...scenarios,...drafts,...macros);
+  select.replaceChildren(new Option('Открыть сценарий…',''),...scenarios,...drafts,...macros);
   select.value=current;
 }
 async function loadFiles(){
