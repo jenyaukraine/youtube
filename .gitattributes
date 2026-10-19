@@ -1,0 +1,6 @@
+# One line-ending format in the repository: LF. Windows checkouts get LF too (editors handle it).
+* text=auto eol=lf
+*.bat text eol=crlf
+*.zip binary
+*.jpg binary
+*.png binary

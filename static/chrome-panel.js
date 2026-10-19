@@ -49,7 +49,7 @@
     $('autoCard').hidden = chromeMode;
     document.querySelectorAll('.server-only').forEach(el => el.hidden = chromeMode);
     $('btnStop').disabled = chromeMode ? !playing : !curJob;
-    $('scenarioHint').textContent = chromeMode ? 'Сценарий выполнится в подключённой вкладке Chrome после 10 секунд ожидания. Шаги видны справа.' : 'Вкладка откроет адрес и сразу выполнит сохранённые шаги. Повторы — в поле справа от «Повторить».';
+    $('scenarioHint').textContent = chromeMode ? 'Сценарий выполнится в подключённой вкладке Chrome через 1 секунду после загрузки. Шаги видны справа.' : 'Вкладка откроет адрес и сразу выполнит сохранённые шаги. Повторы — в поле справа от «Повторить».';
     $('btnStart').textContent = chromeMode ? 'Открыть в Chrome' : 'Запустить';
     showScenario();
     if (chromeMode) refreshStatus();
@@ -116,7 +116,7 @@
           const next = await bridge('execute', {step: {action: 'navigate', value: url}});
           if (!next.ok) throw new Error(next.error || 'Не удалось открыть страницу');
         }
-        await pause(10000);
+        await pause(1000);
         for (let i = 0; i < selected.steps.length && !cancelled; i++) {
           const step = substitute(selected.steps[i], selected);
           items.forEach((li, index) => { li.classList.toggle('current', index === i); li.classList.toggle('done', index < i); });
