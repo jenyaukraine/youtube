@@ -348,3 +348,36 @@ label.btn{text-transform:none;letter-spacing:0;font-size:12px;color:var(--txt-2)
 .scenario-steps li.failed{border-color:var(--rec);background:var(--rec-dim);color:#ffd4d8}
 .scenario-steps li.failed span{display:inline}
 .scenario-progress.done .scenario-steps li{opacity:.75}
+
+/* ---------- 16. Прогресс сценария: шлифовка ---------- */
+.scenario-progress{background:linear-gradient(180deg,rgba(23,28,40,.9),rgba(18,22,32,.9));border-color:var(--line-2)}
+.scenario-progress-head{align-items:baseline}
+.scenario-now{gap:12px;margin-top:8px}
+.scenario-now-k{font-size:17px}
+.scenario-now-t{font-size:13px;color:var(--txt-2)}
+.scenario-now-t:empty{display:none}
+.scenario-track{height:5px;background:rgba(255,255,255,.06)}
+.scenario-track i{background:linear-gradient(90deg,var(--accent),#b9f5c7);box-shadow:0 0 10px rgba(143,227,162,.45)}
+.scenario-progress.error .scenario-track i{background:var(--rec);box-shadow:0 0 10px rgba(255,122,133,.4)}
+.scenario-steps{gap:5px;margin-top:12px;mask-image:linear-gradient(90deg,transparent,black 24px,black calc(100% - 24px),transparent);-webkit-mask-image:linear-gradient(90deg,transparent,black 24px,black calc(100% - 24px),transparent)}
+.scenario-steps li{height:26px;min-width:26px;justify-content:center;padding:0 6px;border-radius:7px;font-size:11px;background:rgba(255,255,255,.03)}
+.scenario-steps li b{font-weight:600}
+.scenario-steps li.done{background:rgba(143,227,162,.1)}
+.scenario-steps li.done b{color:var(--accent)}
+.scenario-steps li.current{padding:0 10px 0 8px;gap:8px;background:rgba(127,184,255,.18)}
+.scenario-steps li.current b{color:#fff}
+.scenario-steps li.current span,.scenario-steps li.failed span{display:inline;font-weight:600}
+.scenario-steps li:not(.current):not(.failed):hover span{display:inline}
+
+/* ---------- 17. Выбор шага в прогрессе: действие на месте ---------- */
+.scenario-action{display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px 8px 8px 12px;border:1px solid rgba(127,184,255,.45);border-radius:var(--r-s);background:rgba(127,184,255,.1)}
+.scenario-action[hidden]{display:none}
+.scenario-action-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 12.5px var(--font);color:#e6f1ff}
+.scenario-action .scenario-run{display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border:0;border-radius:7px;background:var(--info);color:#071424;font:800 12px var(--font);cursor:pointer}
+.scenario-action .scenario-run:hover{background:#9ccaff}
+.scenario-action .scenario-action-x{display:inline-flex;align-items:center;justify-content:center;width:32px;min-height:32px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--txt-3);font:700 13px var(--font);cursor:pointer}
+.scenario-action .scenario-action-x:hover{color:var(--txt);border-color:var(--line-2)}
+.scenario-steps li.picked{border-color:var(--info);background:rgba(127,184,255,.16);color:#e6f1ff}
+.scenario-steps li.picked span{display:inline;font-weight:600}
+.recorded-steps li{font:12.5px var(--font);color:var(--txt-2)}
+.recorded-steps li.from{color:var(--txt)}

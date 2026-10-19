@@ -97,6 +97,17 @@ class Worker:
                          "wait_until": self.scenario_wait_until},
         }
 
+SAFE_VALUE_ACTIONS = {"wait", "scroll", "press", "navigate", "select", "attribute", "wait_url", "screenshot", "page_text"}
+
+
+def public_step(step: Step) -> dict:
+    """Step as shown in the dashboard: coordinates and selectors yes, typed text and passwords no."""
+    return {"action": step.action, "name": step.name, "kind": step.kind, "query": step.query, "role": step.role,
+            "x": step.x, "y": step.y, "end_x": step.end_x, "end_y": step.end_y, "nth": step.nth,
+            "value": step.value if step.action in SAFE_VALUE_ACTIONS else "",
+            "duration_ms": step.value if step.action == "wait" else ""}
+
+
 class Job:
     def __init__(self, jid, url, workers, duration, cookies, user_agent_mode="chrome",
                  dialogs="dismiss", profile=""):
@@ -140,9 +151,7 @@ class Job:
             "total_watch_hours": round(self.total_watch() / 3600, 3),
             "created": self.created,
             "workers_list": [w.snapshot() for w in self.workers_list],
-            "scenario_steps": [{"action": step.action, "name": step.name,
-                                "duration_ms": step.value if step.action == "wait" else ""}
-                               for step in self.steps],
+            "scenario_steps": [public_step(step) for step in self.steps],
         }
         if with_token:
             data["control_token"] = self.control_token
@@ -942,6 +951,15 @@ async def ws(websocket: WebSocket):
 @app.get("/healthz")
 async def healthz():
     return {"ok": True, "jobs": len(JOBS)}
+
+
+@app.middleware("http")
+async def no_cache_static(request, call_next):
+    """The dashboard is edited often; make browsers revalidate HTML/CSS/JS on every load."""
+    response = await call_next(request)
+    if request.url.path.endswith((".html", ".css", ".js")) or request.url.path == "/":
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")

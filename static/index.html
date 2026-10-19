@@ -508,11 +508,11 @@ async function start(){
     const r = await fetch('/api/start', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({url, workers:+wr.value, duration, headers, user_agent_mode:$('uaMode').value, steps:startSteps()})
+      body: JSON.stringify({url, workers:+wr.value, duration, headers, user_agent_mode:$('uaMode').value, steps:(window._pendingStartSteps=startSteps())})
     });
     const j = await r.json();
     if(!j.ok) toast(j.error || 'Ошибка запуска','err');
-    else { toast('Открыто вкладок: ' + j.workers,'ok'); curJob = j.id; sessionStorage.setItem('katya_control_' + j.id, j.control_token); }
+    else { toast('Открыто вкладок: ' + j.workers,'ok'); curJob = j.id; sessionStorage.setItem('katya_control_' + j.id, j.control_token); if(window._pendingStartSteps?.length) try{ sessionStorage.setItem('katya_steps_'+j.id, JSON.stringify(window._pendingStartSteps)); }catch{} }
   }catch(e){ toast('Нет связи с ботом: '+e.message,'err'); }
   $('btnStart').disabled = false;
 }
@@ -538,10 +538,48 @@ function updateActionFields(card){
   card.querySelector('.control-help').textContent = action === 'wait_click' ? 'Ждёт появления элемента до 2 минут и нажимает один раз.' : action === 'click' ? 'Можно также нажать прямо на скриншот. Для точного выбора укажи CSS, текст, роль или label.' : 'Действие выполняется только в этой вкладке. После него кадр обновится.';
 }
 
+const KIND_LABELS={css:'селектор',text:'текст',role:'роль',label:'подпись',placeholder:'placeholder',xpath:'xpath'};
+function pct(v){ return `${Math.round((Number(v)||0)*100)}%`; }
+function describeStep(step){
+  if(!step) return '';
+  const q=step.query?`${KIND_LABELS[step.kind]||step.kind||''} «${String(step.query).slice(0,40)}»`:'';
+  const v=step.value==null?'':String(step.value);
+  const secret=/{{\s*password\s*}}/.test(v);
+  const text=secret?'••••••':v.length>28?`«${v.slice(0,28)}…»`:`«${v}»`;
+  switch(step.action){
+    case 'wait': return `Пауза ${((Number(step.duration_ms||v)||0)/1000).toFixed(1)} с`;
+    case 'point': return `Клик по точке ${pct(step.x)}, ${pct(step.y)}`;
+    case 'move': return `Курсор к ${pct(step.x)}, ${pct(step.y)}`;
+    case 'mouse_drag': return `Выделение мышью ${pct(step.x)}, ${pct(step.y)} → ${pct(step.end_x)}, ${pct(step.end_y)}`;
+    case 'click': return `Клик: ${q||'элемент'}`;
+    case 'wait_click': return `Дождаться и кликнуть: ${q}`;
+    case 'dblclick': return `Двойной клик: ${q}`;
+    case 'hover': return `Навести на ${q}`;
+    case 'scroll': { const px=Number(v||500); return q?`Прокрутить к ${q}`:`Прокрутка ${px<0?'вверх':'вниз'} на ${Math.abs(px)} px`; }
+    case 'type': return v?`Ввод текста ${text}`:'Ввод текста';
+    case 'fill': return `Заполнить ${q} → ${v?text:'…'}`;
+    case 'select': return `Выбрать ${text} в ${q}`;
+    case 'press': return `Клавиша ${v||'?'}`;
+    case 'navigate': return `Открыть ${v.replace(/^https?:\/\//,'').slice(0,48)}`;
+    case 'reload': return 'Перезагрузить страницу';
+    case 'back': return 'Назад';
+    case 'wait_for': return `Ждать появления ${q}`;
+    case 'wait_gone': return `Ждать исчезновения ${q}`;
+    case 'wait_url': return `Ждать URL ${text}`;
+    case 'screenshot': return `Скриншот${step.name?' «'+step.name+'»':''}`;
+    case 'page_text': return 'Прочитать текст страницы';
+    case 'text': return `Прочитать текст ${q}`;
+    case 'exists': case 'count': return `Проверить ${q}`;
+    case 'attribute': return `Атрибут ${v} у ${q}`;
+    case 'drag': return `Перетащить ${q} → ${text}`;
+    case 'inspect': return 'Осмотр элемента';
+    default: return (ACTION_LABELS[step.action]||step.action)+(q?' '+q:'')+(v?' '+text:'');
+  }
+}
 function renderSteps(card){
   const list=card.querySelector('.recorded-steps');
   const from=card._playFrom||0;
-  list.replaceChildren(...(card._steps||[]).map((step,i)=>{ const item=document.createElement('li'); item.dataset.index=i; item.title=i===from&&from?'Повтор начнётся отсюда · нажми, чтобы снять':'Нажми — повторять с этого шага'; item.classList.toggle('from',i===from&&from>0); item.classList.toggle('skipped',i<from); item.textContent=step.action==='wait'?`Пауза ${(Number(step.value)/1000).toFixed(1)} с`:`${ACTION_LABELS[step.action]||step.action} ${step.query||step.value||((step.x||0).toFixed(2)+', '+(step.y||0).toFixed(2))}`; return item; }));
+  list.replaceChildren(...(card._steps||[]).map((step,i)=>{ const item=document.createElement('li'); item.dataset.index=i; item.title=i===from&&from?'Повтор начнётся отсюда · нажми, чтобы снять':'Нажми — повторять с этого шага'; item.classList.toggle('from',i===from&&from>0); item.classList.toggle('skipped',i<from); item.textContent=describeStep(step); return item; }));
   const rb=card.querySelector('.record-replay'); if(rb && !card._replaying) rb.textContent=from>0?`▶ С шага ${from+1}`:'▶ Повторить';
   const count=card._steps?.length||0;
   card.querySelector('.record-status').textContent=card.dataset.recording==='1'
@@ -553,11 +591,11 @@ function renderScenario(card,worker){
   const pane=card.querySelector('.scenario-progress'),steps=worker._j.scenario_steps||[],status=worker.scenario||{};
   card._scenarioSteps=steps;
   pane.hidden=!steps.length;
-  if(!steps.length) return;
+  if(!steps.length || card._clientRun) return;
   if(card._scenarioId!==worker._j.id){
     card._scenarioId=worker._j.id;
     card.querySelector('.scenario-steps').replaceChildren(...steps.map((step,index)=>{
-      const label=step.action==='wait'?`Пауза ${(Number(step.duration_ms)/1000).toFixed(1)} с`:(step.name||ACTION_LABELS[step.action]||step.action);
+      const label=describeStep(step);
       const li=document.createElement('li'); li.innerHTML='<b></b><span></span>'; li.querySelector('b').textContent=index+1; li.querySelector('span').textContent=label; li.title=`${index+1}. ${label} — нажми, чтобы повторять с этого шага`; return li;
     }));
   }
@@ -570,7 +608,7 @@ function renderScenario(card,worker){
     li.classList.toggle('failed',status.phase==='error' && index===cur);
   });
   pane.classList.toggle('done',status.phase==='done');
-  const stepLabel=i=>{ const st=steps[i]; if(!st) return ''; return st.action==='wait'?`Пауза ${(Number(st.duration_ms)/1000).toFixed(1)} с`:(st.name||ACTION_LABELS[st.action]||st.action)+(st.query?` · ${st.query}`:st.value&&st.action!=='type'?` · ${String(st.value).slice(0,40)}`:''); };
+  const stepLabel=i=>describeStep(steps[i]);
   const nowK=card.querySelector('.scenario-now-k'), nowT=card.querySelector('.scenario-now-t');
   if(running){ nowK.textContent=`Шаг ${cur+1} из ${steps.length}`; nowT.textContent=stepLabel(cur); }
   else if(status.phase==='error'){ nowK.textContent=`Ошибка на шаге ${cur+1}`; nowT.textContent=stepLabel(cur); }
@@ -604,6 +642,24 @@ function updateScenarioPauseCountdown(card){
   card.querySelector('.scenario-progress-status').textContent=text;
   const chip=card.querySelectorAll('.scenario-steps li')[pause.index]?.querySelector('span');
   if(chip) chip.textContent=`${seconds} с`;
+}
+function clearScenarioPick(card){
+  card._scenarioPick=null; card._playFrom=0; renderSteps(card);
+  card.querySelector('.scenario-action').hidden=true;
+  card.querySelectorAll('.scenario-steps li.picked').forEach(el=>el.classList.remove('picked'));
+}
+function renderClientProgress(card,index,total,phase){
+  const pane=card.querySelector('.scenario-progress'); if(pane.hidden || (card._scenarioSteps||[]).length!==total) return;
+  const lis=card.querySelectorAll('.scenario-steps li');
+  if(phase==='end'){ card._clientRun=false; return; }
+  card._clientRun=true;
+  pane.classList.remove('error','done');
+  lis.forEach((li,k)=>{ li.classList.toggle('done',k<index); li.classList.toggle('current',k===index); li.classList.remove('failed','picked'); });
+  card.querySelector('.scenario-track i').style.width=`${index/total*100}%`;
+  card.querySelector('.scenario-now-k').textContent=`Шаг ${index+1} из ${total}`;
+  card.querySelector('.scenario-now-t').textContent=describeStep(card._steps?.[index]);
+  card.querySelector('.scenario-progress-status').textContent=`Повтор из записи · ${index}/${total}`;
+  lis[index]?.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
 }
 function updateScenarioCountdown(label){
   if(!label.dataset.waitUntil) return;
@@ -869,13 +925,27 @@ $('workersPanel').addEventListener('click', async e => {
   }
   if(e.target.closest('.scenario-steps li')){
     const li=e.target.closest('li'), card=li.closest('.worker'), i=[...li.parentNode.children].indexOf(li);
-    const steps=(card._scenarioSteps||[]).map(step=>({...step,value:step.action==='wait'&&!step.value&&step.duration_ms?String(step.duration_ms):(step.value||'')}));
-    if(!steps.length){ toast('Шаги сценария ещё не получены','err'); return; }
-    card._steps=structuredClone(steps); card._playFrom=i; card.querySelector('.worker-control').open=true;
-    renderSteps(card); persistDraft(card);
-    card.querySelector('.recorder').scrollIntoView({behavior:'smooth',block:'nearest'});
-    toast(`Сценарий загружен в запись · старт с шага ${i+1}. Нажми ▶`); return;
+    const job=card.querySelector('.worker-stop').dataset.job;
+    let full=null; try{ full=JSON.parse(sessionStorage.getItem('katya_steps_'+job)||'null'); }catch{}
+    const base=(full?.length===(card._scenarioSteps||[]).length)?full:(card._scenarioSteps||[]);
+    const steps=base.map(step=>({...step,value:step.action==='wait'&&!step.value&&step.duration_ms?String(step.duration_ms):(step.value||'')}));
+    if(!steps.length) return;
+    if(card._scenarioPick===i){ clearScenarioPick(card); return; }
+    card._scenarioPick=i;
+    card._steps=structuredClone(steps); card._playFrom=i; renderSteps(card); persistDraft(card);
+    card.querySelectorAll('.scenario-steps li').forEach((el,k)=>el.classList.toggle('picked',k===i));
+    card.querySelector('.scenario-action-t').textContent=`Шаг ${i+1} из ${steps.length} · ${describeStep(steps[i])}${full?'':' · детали шагов недоступны: открой вкладку из этой панели'}`;
+    card.querySelector('.scenario-action').hidden=false;
+    return;
   }
+  if(e.target.matches('.scenario-run')){
+    const card=e.target.closest('.worker');
+    if(!card._steps?.length){ clearScenarioPick(card); return; }
+    card.querySelector('.scenario-action').hidden=true;
+    card.querySelector('.record-replay').click();
+    return;
+  }
+  if(e.target.matches('.scenario-action-x')){ clearScenarioPick(e.target.closest('.worker')); return; }
   if(e.target.matches('.record-unselect')){
     const card=e.target.closest('.worker'); card._playFrom=0; renderSteps(card); e.target.closest('.recorder-more').removeAttribute('open'); return;
   }
@@ -909,6 +979,7 @@ $('workersPanel').addEventListener('click', async e => {
         for(let run=0;run<repeats && !card._cancelReplay && card.isConnected;run++){
           for(let i=Math.min(card._playFrom||0,steps.length-1);i<steps.length;i++){
             if(card._cancelReplay || !card.isConnected) break;
+            renderClientProgress(card,i,steps.length,'run');
             const result=await runAction(card,steps[i],{quiet:true,record:false,refresh:false});
             if(!result?.ok){ failedStep=i+1; break; }
             if(i<steps.length-1 && !steps.some(step=>step.action==='wait')) await new Promise(resolve=>setTimeout(resolve,1500));
@@ -919,6 +990,7 @@ $('workersPanel').addEventListener('click', async e => {
         }
       } finally {
         card._replaying=false; countInput.disabled=false; e.target.disabled=false;
+        renderClientProgress(card,0,steps.length,'end');
         e.target.classList.remove('running'); e.target.textContent=(card._playFrom||0)>0?`▶ С шага ${card._playFrom+1}`:'▶ Повторить';
         if(card.isConnected) loadShot(card,true);
       }
@@ -1100,7 +1172,7 @@ function render(data){
       if(!card){
         card = document.createElement('div');
         card.className = 'worker'; card.dataset.id = w.id;
-        card.innerHTML = `<div class="scenario-progress" hidden><div class="scenario-progress-head"><strong>Сценарий</strong><span class="scenario-progress-status"></span></div><div class="scenario-now"><span class="scenario-now-k"></span><span class="scenario-now-t"></span></div><div class="scenario-track"><i></i></div><ol class="scenario-steps" aria-label="Шаги сценария"></ol></div>
+        card.innerHTML = `<div class="scenario-progress" hidden><div class="scenario-progress-head"><strong>Сценарий</strong><span class="scenario-progress-status"></span></div><div class="scenario-now"><span class="scenario-now-k"></span><span class="scenario-now-t"></span></div><div class="scenario-action" hidden><span class="scenario-action-t"></span><button type="button" class="scenario-run">▶ Запустить отсюда</button><button type="button" class="scenario-action-x" aria-label="Снять выбор" title="Снять выбор">✕</button></div><div class="scenario-track"><i></i></div><ol class="scenario-steps" aria-label="Шаги сценария"></ol></div>
           <div class="worker-preview" tabindex="0"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки — нажми, выдели или прокрути" draggable="false" hidden><textarea class="preview-key-capture" aria-label="Клавиатура вкладки" autocomplete="off"></textarea><div class="preview-tools"><button type="button" class="preview-pick">⌕ Выбрать элемент</button></div><button type="button" class="preview-expand">⛶ Развернуть</button><span class="shot-time">Ожидаю кадр…</span></div>
           <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
           <div class="worker-actions"><button type="button" class="worker-reload">Перезагрузить вкладку</button><button type="button" class="worker-stop">Закрыть</button></div>
@@ -1157,7 +1229,7 @@ async function apiFetch(url,options={}){
   catch(e){ return {ok:false,error:'Нет связи: '+e.message}; }
 }
 let MACROS=[];
-function describeStep(step){ return `${step.action}${step.query?' '+step.query:''}${step.value?' = '+step.value:''}`; }
+// describeStep: см. выше, единое описание шага для рекордера, прогресса и макросов
 async function loadMacros(){
   const r=await apiFetch('/api/macros'); MACROS=r.macros||[];
   $('macroList').replaceChildren(...MACROS.map(m=>{ const item=document.createElement('div'); item.className='auto-item';
