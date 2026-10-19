@@ -301,7 +301,7 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
     <div class="card">
       <h2>Открыть вкладки</h2>
       <label>Адрес страницы</label>
-      <input type="text" id="url" name="katya_browser_url" autocomplete="off" autocapitalize="off" placeholder="https://example.com" spellcheck="false">
+      <input type="url" id="url" name="katya_target_url" autocomplete="url" inputmode="url" autocapitalize="off" placeholder="https://example.com" spellcheck="false">
       <div class="hint">Любой полный http:// или https:// URL. Для YouTube можно вставить и короткую ссылку.</div>
 
       <label>Потоков (параллельных окон)</label>
@@ -414,7 +414,6 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
 const $ = id => document.getElementById(id);
 let ws, wsAlive = false, curJob = null, tick = 0, activePreviewCard = null, latestCpu = 0;
 const cpuSamples = [];
-window.addEventListener('pageshow', () => setTimeout(() => { if ($('url').value.trim().toLowerCase() === 'admin') $('url').value = ''; }, 100));
 
 // sliders
 const wr = $('workers');
