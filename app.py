@@ -578,13 +578,13 @@ async def worker_screenshot(job_id: str, worker_id: str, force: bool = False):
     lock = job.screenshot_locks.setdefault(worker_id, asyncio.Lock())
     async with lock:
         cached = job.screenshots.get(worker_id)
-        if cached and time.monotonic() - cached[0] < (2 if force else 15):
+        if cached and time.monotonic() - cached[0] < (0.3 if force else 15):
             return Response(cached[1], media_type="image/jpeg", headers={"Cache-Control": "private, max-age=10"})
         page = job.pages.get(worker_id)
         if not page or page.is_closed():
             return JSONResponse({"error": "Вкладка закрыта"}, status_code=404)
         try:
-            image = await page.screenshot(type="jpeg", quality=50, timeout=8000, animations="disabled")
+            image = await page.screenshot(type="jpeg", quality=60, timeout=8000)
         except Exception:
             return JSONResponse({"error": "Снимок пока недоступен"}, status_code=503)
         job.screenshots[worker_id] = (time.monotonic(), image)

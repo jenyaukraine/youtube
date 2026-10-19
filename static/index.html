@@ -426,6 +426,7 @@ function renderSteps(card){
   list.replaceChildren(...(card._steps||[]).map((step,i)=>{ const item=document.createElement('li'); item.textContent=`${i+1}. ${step.action} ${step.query||step.value||((step.x||0).toFixed(2)+', '+(step.y||0).toFixed(2))}`; return item; }));
 }
 async function runAction(card, payload, options={}){
+  card._lastTouch=Date.now();
   const button = card.querySelector('.worker-stop');
   const job = button.dataset.job, worker = button.dataset.worker;
   const control_token = sessionStorage.getItem('katya_control_' + job);
@@ -652,14 +653,29 @@ $('workersPanel').addEventListener('paste', e => {
 });
 
 function loadShot(card, force=false){
+  if(card._shotLoading) return;
   const img = card.querySelector('img');
   const job = card.querySelector('[data-job]').dataset.job;
   const worker = card.querySelector('[data-worker]').dataset.worker;
   const now = Date.now();
-  card.dataset.shotBucket = String(Math.floor(now/20000));
-  card.querySelector('.shot-time').textContent = 'Обновляю…';
+  card._shotLoading=true;
+  card.querySelector('.shot-time').textContent = img.hidden ? 'Подключаю кадр…' : '● Live';
   img.src = `/api/worker/${encodeURIComponent(job)}/${encodeURIComponent(worker)}/screenshot?force=${force ? 1 : 0}&t=${now}`;
 }
+
+setInterval(() => {
+  if(document.hidden) return;
+  const cards=[...$('workersPanel').querySelectorAll('.worker')];
+  if(!cards.length) return;
+  const now=Date.now();
+  const recent=cards.filter(card => now-(card._lastTouch||0)<15000).sort((a,b)=>(b._lastTouch||0)-(a._lastTouch||0))[0];
+  const focused=cards.find(card=>card.querySelector('.worker-preview.expanded')) || recent || cards[0];
+  for(const card of cards){
+    if(now<(card._nextShotAt||0)) continue;
+    loadShot(card,true);
+    card._nextShotAt=now+(card===focused ? 700 : 3500);
+  }
+},250);
 
 function promoUrl(){
   const raw = $('url').value.trim();
@@ -754,8 +770,8 @@ function render(data){
             <ol class="recorded-steps"></ol>
           </details>`;
         const img = card.querySelector('img');
-        img.onload = () => { img.hidden = false; card.querySelector('.preview-note').hidden = true; card.querySelector('.shot-time').textContent = 'Кадр ' + new Date().toLocaleTimeString('ru-RU'); };
-        img.onerror = () => { card.querySelector('.shot-time').textContent = 'Кадр недоступен'; if(img.hidden) card.querySelector('.preview-note').textContent = 'Снимок пока недоступен'; };
+        img.onload = () => { card._shotLoading=false; img.hidden = false; card.querySelector('.preview-note').hidden = true; card.querySelector('.shot-time').textContent = '● Live ' + new Date().toLocaleTimeString('ru-RU'); };
+        img.onerror = () => { card._shotLoading=false; card.querySelector('.shot-time').textContent = 'Кадр недоступен'; if(img.hidden) card.querySelector('.preview-note').textContent = 'Снимок пока недоступен'; };
         panel.append(card);
         updateActionFields(card);
         card._steps=[];
@@ -767,8 +783,7 @@ function render(data){
       card.querySelector('.secs').textContent = (w.watch_seconds/3600).toFixed(3) + ' ч';
       card.querySelector('.worker-url').textContent = w.url || w._j.url;
       card.querySelectorAll('.worker-actions button').forEach(button => { button.dataset.job = w._j.id; button.dataset.worker = w.id; });
-      const bucket = Math.floor(Date.now()/20000);
-      if(card.dataset.shotBucket !== String(bucket)) loadShot(card);
+      if(!card._firstShot){ card._firstShot=true; loadShot(card,true); }
     });
   }
 
