@@ -395,6 +395,15 @@ async def stop():
             asyncio.create_task(stop_job(j))
     return {"ok": True}
 
+@app.post("/api/job/{job_id}/stop")
+async def stop_one_job(job_id: str):
+    job = JOBS.get(job_id)
+    if not job:
+        return JSONResponse({"ok": False, "error": "Сессия не найдена"}, status_code=404)
+    if job.status == "running":
+        asyncio.create_task(stop_job(job))
+    return {"ok": True}
+
 @app.post("/api/worker/{job_id}/{worker_id}/stop")
 async def stop_worker(job_id: str, worker_id: str):
     job = JOBS.get(job_id)

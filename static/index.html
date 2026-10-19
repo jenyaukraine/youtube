@@ -401,7 +401,8 @@ async function start(){
 }
 
 async function stopAll(){
-  await fetch('/api/stop',{method:'POST'});
+  if(!curJob){ toast('Нет своей активной сессии','err'); return; }
+  await fetch(`/api/job/${encodeURIComponent(curJob)}/stop`,{method:'POST'});
   toast('Останавливаю…');
 }
 
@@ -713,7 +714,8 @@ function render(data){
   // header
   $('connDot').className = 'dot' + (anyRunning ? ' busy':'');
   $('connTxt').textContent = anyRunning ? 'работает' : (wsAlive ? 'онлайн' : 'оффлайн');
-  $('btnStop').disabled = !anyRunning;
+  if(!active.some(j => j.id === curJob)) curJob = active.find(j => sessionStorage.getItem('katya_control_' + j.id))?.id || null;
+  $('btnStop').disabled = !curJob;
 
   // goal
   $('goalHours').textContent = fmtH(total);
