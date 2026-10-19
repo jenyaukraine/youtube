@@ -262,6 +262,39 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
 .auto-form .wide{grid-column:1/-1}
 .auto-form button{grid-column:1/-1;padding:10px;border:1px solid #8bcf6d;border-radius:9px;background:#263b29;color:#dfffd1;font:800 12px 'Manrope',sans-serif;cursor:pointer}
 .macro-pick{padding:8px 10px;border:1px solid #465568;border-radius:8px;background:#182230;color:#d7e5f4;font:700 11px 'Manrope',sans-serif}
+
+/* Calm, consistent controls and a compact automation workspace. */
+:root{--green:#a5d7a2;--green2:#83bd86;--green-dim:rgba(131,189,134,.12);--green-glow:rgba(131,189,134,.18);--txt2:#c5cdd9;--txt3:#9ca9ba}
+.bg-fx{background:radial-gradient(760px 460px at 82% -20%,rgba(131,189,134,.055),transparent 72%)}
+.goal{background:linear-gradient(125deg,#1d2330,#1a202b 75%)}
+.goal .big,.tile .t-val.g,.system-head strong{color:var(--green)}
+.btn-go{background:#9bd293;box-shadow:none}.btn-go:hover{background:#acdca5;box-shadow:0 6px 20px rgba(131,189,134,.14)}
+input[type=url],input[type=text],input[type=password]{width:100%;min-width:0;min-height:48px;background:#101722;border:1px solid #465368;border-radius:11px;color:var(--txt);padding:12px 14px;font:500 14px 'Manrope',system-ui,sans-serif;outline:none;transition:border-color .15s,box-shadow .15s}
+input[type=url]:focus,input[type=text]:focus,input[type=password]:focus{border-color:#96cb98;box-shadow:0 0 0 3px rgba(131,189,134,.16)}
+input[type=url]::placeholder{color:#8290a3}
+.hint{color:#a0adbd;font-size:12px;line-height:1.55}
+.auto-card{margin-top:22px;padding:24px}
+.auto-head{margin-bottom:18px;align-items:center}
+.auto-head h2{margin:0;font-size:16px}
+.token-settings{margin-left:auto;color:var(--txt2);font-size:12px}
+.token-settings summary{cursor:pointer;list-style:none;border:1px solid #445166;border-radius:9px;background:#1b2430;padding:9px 12px;font-weight:700}
+.token-settings summary::-webkit-details-marker{display:none}
+.token-settings[open]{width:min(100%,310px)}
+.token-settings[open] summary{margin-bottom:9px}
+.token-box{display:block}.token-box input{width:100%;min-height:42px}.token-box small{display:block;margin-top:5px;color:var(--txt3)}
+.auto-grid{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:14px;align-items:start}
+.auto-col{min-width:0;padding:20px;border:1px solid #394557;border-radius:14px;background:#121923}
+.auto-col:first-child{grid-row:span 2}
+.auto-col h3{font-size:14px;color:#e7edf4;margin-bottom:12px;gap:10px}
+.auto-col h3 .hint{font-size:11px;font-weight:500;white-space:nowrap}
+.auto-list{min-height:0}.auto-list:empty::before{line-height:1.55;color:#a4b0c0}
+.auto-form{margin-top:16px;padding-top:16px;gap:10px;border-color:#394557}
+.auto-form select,.auto-form input,.auto-form textarea{min-height:44px;border-color:#465368;background:#0e1520;color:#e7edf4;font-size:13px}
+.auto-form button{min-height:44px;background:#25392b;border-color:#719d75;color:#d7efda;font-size:13px}
+.auto-form button:hover{background:#304a37}
+.auto-col h3 button{padding:7px 10px;font-size:11px}
+@media(max-width:900px){.auto-grid{grid-template-columns:1fr}.auto-col:first-child{grid-row:auto}}
+@media(max-width:600px){.auto-head{align-items:flex-start}.token-settings{margin-left:0;width:100%}.auto-col{padding:16px}.auto-col h3{align-items:flex-start;flex-wrap:wrap}.auto-col h3 .hint{white-space:normal}}
 </style>
 </head>
 <body>
@@ -301,7 +334,7 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
     <div class="card">
       <h2>Открыть вкладки</h2>
       <label>Адрес страницы</label>
-      <input type="url" id="url" name="katya_target_url" autocomplete="url" inputmode="url" autocapitalize="off" placeholder="https://example.com" spellcheck="false">
+      <input type="url" id="url" name="katya_target_url" autocomplete="url" inputmode="url" autocapitalize="off" placeholder="https://example.com" value="https://www.youtube.com/watch?v=i6XB07FpBG0" spellcheck="false">
       <div class="hint">Любой полный http:// или https:// URL. Для YouTube можно вставить и короткую ссылку.</div>
 
       <label>Потоков (параллельных окон)</label>
@@ -380,7 +413,7 @@ footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:
   <section class="card auto-card" id="autoCard">
   <div class="auto-head">
     <h2>Автоматизация · триггеры, макросы, файлы</h2>
-    <div class="token-box"><input type="password" id="apiToken" placeholder="API-ключ (data/api_token.txt)" autocomplete="off"><small>нужен для сохранения</small></div>
+    <details class="token-settings"><summary>Ключ API для сохранения</summary><div class="token-box"><input type="password" id="apiToken" placeholder="Ключ API" autocomplete="off"><small>Файл data/api_token.txt</small></div></details>
   </div>
   <div class="auto-grid">
     <div class="auto-col">
