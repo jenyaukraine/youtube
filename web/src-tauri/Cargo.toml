@@ -1,0 +1,13 @@
+[package]
+name = "katya-browser-lab"
+version = "0.5.1"
+description = "Katya Browser Lab desktop"
+authors = ["Techno Punch"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"

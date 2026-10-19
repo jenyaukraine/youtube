@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Katya Browser Bridge",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Подключает выбранную вкладку Chrome к панели Katya Browser Lab.",
   "permissions": ["tabs", "windows", "scripting", "storage", "activeTab", "debugger"],
   "host_permissions": ["<all_urls>"],

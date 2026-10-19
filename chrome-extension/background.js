@@ -358,3 +358,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 });
+
+// Tauri's WebView has no Chrome extension content scripts. Bridge the desktop
+// panel to this same command handler over a loopback-only WebSocket instead.
+function connectDesktop() {
+  let socket;
+  try { socket = new WebSocket('ws://127.0.0.1:18110/extension/ws'); }
+  catch { setTimeout(connectDesktop, 5000); return; }
+  let heartbeat;
+  socket.onopen = () => {
+    heartbeat = setInterval(() => { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({kind: 'ping'})); }, 20000);
+  };
+  socket.onmessage = async event => {
+    let request;
+    try { request = JSON.parse(event.data); } catch { return; }
+    if (!request?.id || !request.command) return;
+    let reply;
+    try { reply = await handle(request.command, request.payload); }
+    catch (error) { reply = {ok: false, error: error.message || 'Команда не выполнена'}; }
+    if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({id: request.id, reply}));
+  };
+  socket.onclose = () => { clearInterval(heartbeat); setTimeout(connectDesktop, 5000); };
+  socket.onerror = () => socket.close();
+}
+connectDesktop();

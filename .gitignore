@@ -9,4 +9,8 @@ data/
 *.db
 web/node_modules/
 web/dist/
+web/src-tauri/target/
+web/src-tauri/binaries/
+web/src-tauri/gen/
+build/
 schedules.json

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Automation } from './components/Automation';
 import { StartForm } from './components/StartForm';
 import { TabCard } from './components/TabCard';
+import { ChromeWorkspace } from './components/ChromeWorkspace';
 import { ScenariosPage } from './pages/ScenariosPage';
 import { listMacros, localScenarios, ownedJob } from './lib/api';
 import { useLive } from './lib/live';
@@ -21,7 +22,8 @@ export default function App() {
   const { state } = useLive();
   const [scenarios, setScenarios] = useState<Scenario[]>(localScenarios());
   const [macros, setMacros] = useState<Macro[]>([]);
-  const cpu = useRef<number[]>([]);
+  const [mode, setMode] = useState<'playwright' | 'chrome'>(() => localStorage.getItem('katya_launch_method') === 'chrome' ? 'chrome' : 'playwright');
+  const changeMode = (next: 'playwright' | 'chrome') => { localStorage.setItem('katya_launch_method', next); setMode(next); };
   const refreshMacros = useCallback(async () => { const r = await listMacros(); setMacros(r.macros || []); }, []);
   const refreshScenarios = useCallback(() => setScenarios(localScenarios()), []);
   useEffect(() => { refreshMacros(); }, [refreshMacros]);
@@ -29,10 +31,6 @@ export default function App() {
   const running = state.jobs.filter(j => j.status === 'running');
   const tabs = running.flatMap(j => j.workers_list.filter(w => w.state !== 'stopped').map(w => ({ job: j, worker: w })));
   const own = ownedJob(state.jobs);
-  cpu.current = [...cpu.current, state.system.cpu_percent].slice(-60);
-  const points = cpu.current.map((v, i) => `${(i / 59 * 600).toFixed(1)},${(108 - Math.min(100, v) * 1.04).toFixed(1)}`);
-  const line = points.length ? 'M' + points.join(' L') : '';
-  const errors = tabs.filter(t => t.worker.state === 'error' || t.worker.state === 'blocked').length;
 
   return (
     <div className="wrap">
@@ -44,8 +42,8 @@ export default function App() {
       </header>
 
       <>
-          <div className="grid">
-            <StartForm jobs={state.jobs} scenarios={scenarios} macros={macros} ownJob={own} />
+          {mode === 'chrome' ? <ChromeWorkspace scenarios={scenarios} macros={macros} onBack={() => changeMode('playwright')} onScenariosChanged={() => { refreshScenarios(); refreshMacros(); }} /> : <div className="grid">
+            <StartForm jobs={state.jobs} scenarios={scenarios} macros={macros} ownJob={own} onChrome={() => changeMode('chrome')} />
             <div className="card">
               <h2>Вкладки</h2>
               <details className="scenarios-inline"><summary>Сохранённые сценарии · {scenarios.length + macros.length}</summary><ScenariosPage scenarios={scenarios} macros={macros} onChanged={refreshScenarios} onMacrosChanged={refreshMacros} onStarted={() => undefined} /></details>
@@ -53,25 +51,13 @@ export default function App() {
                 {tabs.length === 0 && <div className="empty">Нет активных вкладок.<br /><b>После запуска карточки появятся здесь.</b></div>}
                 {tabs.map(t => <TabCard key={t.worker.id} job={t.job} worker={t.worker} scenarios={scenarios} macros={macros} onScenariosChanged={() => { refreshScenarios(); refreshMacros(); }} />)}
               </div>
-              <div className="totals">
-                <div className="tile"><div className="t-lbl">Активных вкладок</div><div className="t-val g">{tabs.length}</div></div>
-                <div className="tile"><div className="t-lbl">Триггеров</div><div className="t-val g">{(state.triggers || []).length}</div></div>
-                <div className="tile"><div className="t-lbl">Ошибок</div><div className="t-val a">{errors}</div></div>
-              </div>
-              <div className="system-panel">
-                <div className="system-head"><h3>Нагрузка</h3><strong>{state.system.cpu_percent}%</strong></div>
-                <svg className="system-chart" viewBox="0 0 600 112" preserveAspectRatio="none" aria-label="График загрузки CPU">
-                  <path className="grid-line" d="M0 28 H600 M0 56 H600 M0 84 H600" />
-                  <path className="cpu-area" d={line ? line + ` L${((cpu.current.length - 1) / 59 * 600).toFixed(1)},112 L0,112 Z` : ''} /><path className="cpu-line" d={line} />
-                </svg>
-                <div className="system-foot"><span>RAM <b>{state.system.memory_percent}%</b></span><span>Процессов Chrome <b>{state.system.chromium_processes}</b></span><span>Обновление каждые 2 с</span></div>
-              </div>
             </div>
-          </div>
-          <div className="log">{state.log.slice(-60).map((l, i) => <div className="l" key={i}>{l}</div>)}</div>
-          <Automation jobs={state.jobs} triggers={state.triggers || []} macros={macros} onMacrosChanged={refreshMacros} />
+          </div>}
+          {mode === 'playwright' && <>
+            <details className="diagnostics"><summary>Диагностика сервера</summary><div className="system-foot"><span>CPU <b>{state.system.cpu_percent}%</b></span><span>RAM <b>{state.system.memory_percent}%</b></span><span>Процессов Chrome <b>{state.system.chromium_processes}</b></span></div><div className="log">{state.log.slice(-60).map((l, i) => <div className="l" key={i}>{l}</div>)}</div></details>
+            <details className="automation-section"><summary>Триггеры, макросы и файлы</summary><Automation jobs={state.jobs} triggers={state.triggers || []} macros={macros} onMacrosChanged={refreshMacros} /></details>
+          </>}
       </>
-      <footer>Katya <b>Browser Lab</b> · React · <a href="/legacy/" style={{ color: 'inherit' }}>старая панель</a></footer>
       <Toast />
     </div>
   );

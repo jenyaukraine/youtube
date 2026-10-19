@@ -1,6 +1,7 @@
 // The dashboard talks to this isolated content script; no extension ID is needed.
-const KATYA_ORIGINS = new Set(['https://katya-dev.duckdns.org', 'http://127.0.0.1:8010', 'http://localhost:8010']);
-if (KATYA_ORIGINS.has(location.origin)) {
+const KATYA_PANEL = location.origin === 'https://katya-dev.duckdns.org' ||
+  (location.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(location.hostname));
+if (KATYA_PANEL) {
   window.postMessage({source: 'katya-extension', kind: 'ready'}, location.origin);
   window.addEventListener('message', event => {
     if (event.source !== window || event.origin !== location.origin || event.data?.source !== 'katya-dashboard' || !event.data.id) return;

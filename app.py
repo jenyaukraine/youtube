@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import FastAPI, Header, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Header, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -30,15 +30,31 @@ from katya.scheduler import Schedule, Scheduler, validate_schedule
 async def lifespan(_app: FastAPI):
     """Startup: run the macro scheduler in the background. Shutdown: stop it."""
     SCHEDULER.start()
+    desktop_watch = asyncio.create_task(_watch_desktop_parent()) if os.environ.get("KATYA_DESKTOP_PARENT_PID") else None
     yield
+    if desktop_watch:
+        desktop_watch.cancel()
     await SCHEDULER.stop()
+
+
+async def _watch_desktop_parent():
+    """A frozen Python sidecar must leave no orphan when its Tauri window exits."""
+    import psutil
+    parent = int(os.environ["KATYA_DESKTOP_PARENT_PID"])
+    while True:
+        await asyncio.sleep(2)
+        if not psutil.pid_exists(parent):
+            os._exit(0)
 
 
 app = FastAPI(title="Katya Browser Lab", lifespan=lifespan)
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+ROOT = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
 STATIC = os.path.join(ROOT, "static")
 EXTENSION_DIR = os.path.join(ROOT, "chrome-extension")
+EXTENSION_RELAY_ENABLED = os.environ.get("KATYA_EXTENSION_RELAY") == "1"
+EXTENSION_SOCKET: Optional[WebSocket] = None
+EXTENSION_PENDING: Dict[str, asyncio.Future] = {}
 DATA = os.environ.get("KATYA_DATA_DIR", os.path.join(ROOT, "data"))
 FILES_DIR = os.path.join(DATA, "files")
 MACROS_PATH = os.path.join(DATA, "macros.json")
@@ -64,6 +80,56 @@ async def extension_bundle():
     return {"ok": True, "version": json.loads(files["manifest.json"])["version"], "files": files}
 
 
+@app.get("/api/extension/relay-status")
+async def extension_relay_status():
+    return {"ok": EXTENSION_RELAY_ENABLED, "connected": EXTENSION_SOCKET is not None}
+
+
+@app.post("/api/extension/command")
+async def extension_command(payload: Dict[str, Any], request: Request):
+    if not EXTENSION_RELAY_ENABLED or request.client.host not in ("127.0.0.1", "::1"):
+        return forbidden()
+    socket = EXTENSION_SOCKET
+    if socket is None:
+        return {"ok": False, "error": "Расширение Chrome не подключено к настольному приложению."}
+    command = payload.get("command")
+    if not isinstance(command, str) or len(command) > 80:
+        return {"ok": False, "error": "Неверная команда"}
+    request_id = secrets.token_hex(12)
+    future = asyncio.get_running_loop().create_future()
+    EXTENSION_PENDING[request_id] = future
+    try:
+        await socket.send_json({"id": request_id, "command": command, "payload": payload.get("payload") or {}})
+        return await asyncio.wait_for(future, timeout=35 if command == "execute" else 15)
+    except (asyncio.TimeoutError, RuntimeError, WebSocketDisconnect):
+        return {"ok": False, "error": "Расширение Chrome не ответило"}
+    finally:
+        EXTENSION_PENDING.pop(request_id, None)
+
+
+@app.websocket("/extension/ws")
+async def extension_socket(websocket: WebSocket):
+    global EXTENSION_SOCKET
+    if not EXTENSION_RELAY_ENABLED or websocket.client.host not in ("127.0.0.1", "::1"):
+        await websocket.close(code=1008)
+        return
+    await websocket.accept()
+    EXTENSION_SOCKET = websocket
+    try:
+        while True:
+            packet = await websocket.receive_json()
+            request_id = packet.get("id")
+            if request_id in EXTENSION_PENDING and not EXTENSION_PENDING[request_id].done():
+                EXTENSION_PENDING[request_id].set_result(packet.get("reply") or {"ok": False})
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if EXTENSION_SOCKET is websocket:
+            EXTENSION_SOCKET = None
+        for future in EXTENSION_PENDING.values():
+            if not future.done(): future.set_result({"ok": False, "error": "Расширение отключилось"})
+
+
 def _load_api_token() -> str:
     """API token for agents (MCP, scripts). Generated once and kept in data/api_token.txt."""
     token = os.environ.get("KATYA_API_TOKEN", "").strip()
@@ -83,6 +149,66 @@ def _load_api_token() -> str:
 
 
 API_TOKEN = _load_api_token()
+UNLOCK_PIN = os.environ.get("KATYA_UNLOCK_PIN", "54321")
+UNLOCK_SESSIONS: Dict[str, float] = {}
+UNLOCK_ATTEMPTS: Dict[str, List[float]] = {}
+UNLOCK_COOKIE = "katya_session"
+
+
+def _unlocked(token: Optional[str]) -> bool:
+    if not token:
+        return False
+    expires = UNLOCK_SESSIONS.get(token, 0)
+    if expires <= time.time():
+        UNLOCK_SESSIONS.pop(token, None)
+        return False
+    return True
+
+
+@app.get("/api/unlock/status")
+async def unlock_status(request: Request):
+    return {"ok": True, "unlocked": _unlocked(request.cookies.get(UNLOCK_COOKIE))}
+
+
+@app.post("/api/unlock")
+async def unlock(request: Request):
+    ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    attempts = [t for t in UNLOCK_ATTEMPTS.get(ip, []) if now - t < 60]
+    if len(attempts) >= 5:
+        return JSONResponse({"ok": False, "error": "Слишком много попыток. Подождите минуту."}, status_code=429)
+    try:
+        pin = (await request.json()).get("pin", "")
+    except (ValueError, AttributeError):
+        pin = ""
+    if not isinstance(pin, str) or not secrets.compare_digest(pin, UNLOCK_PIN):
+        UNLOCK_ATTEMPTS[ip] = attempts + [now]
+        return JSONResponse({"ok": False, "error": "Неверный код"}, status_code=401)
+    UNLOCK_ATTEMPTS.pop(ip, None)
+    token = secrets.token_urlsafe(32)
+    UNLOCK_SESSIONS[token] = now + 12 * 3600
+    response = JSONResponse({"ok": True})
+    secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    response.set_cookie(UNLOCK_COOKIE, token, max_age=12 * 3600, httponly=True,
+                        samesite="lax", secure=secure, path="/")
+    return response
+
+
+@app.post("/api/unlock/logout")
+async def unlock_logout(request: Request):
+    UNLOCK_SESSIONS.pop(request.cookies.get(UNLOCK_COOKIE, ""), None)
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(UNLOCK_COOKIE, path="/")
+    return response
+
+
+@app.middleware("http")
+async def require_unlock(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") and path not in ("/api/unlock", "/api/unlock/status"):
+        if not _unlocked(request.cookies.get(UNLOCK_COOKIE)) and not is_api_token(request.headers.get("x-katya-token")):
+            return JSONResponse({"ok": False, "error": "Требуется разблокировка"}, status_code=401)
+    return await call_next(request)
 
 # ---------------- state ----------------
 class Worker:
@@ -1275,6 +1401,9 @@ async def delete_file(name: str, x_katya_token: Optional[str] = Header(default=N
 # ---------------- live feed ----------------
 @app.websocket("/ws")
 async def ws(websocket: WebSocket):
+    if not _unlocked(websocket.cookies.get(UNLOCK_COOKIE)) and not is_api_token(websocket.headers.get("x-katya-token")):
+        await websocket.close(code=1008)
+        return
     await websocket.accept()
     try:
         while True:

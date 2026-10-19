@@ -4,6 +4,7 @@ import {
   runAction, saveLocalScenarios, saveMacro, screenshotUrl, stopWorker, toast,
 } from '../lib/api';
 import type { Job, Macro, Scenario, Step, Worker } from '../lib/types';
+import { runScenario } from '../lib/scenarioRunner';
 import { ScenarioPanel, type ClientRun, type LoadOption } from './ScenarioPanel';
 
 interface Props { job: Job; worker: Worker; scenarios: Scenario[]; macros: Macro[]; onScenariosChanged: () => void }
@@ -172,19 +173,14 @@ export function TabCard({ job, worker, scenarios, macros, onScenariosChanged }: 
     let runs = 0, failed = 0;
     const showProgress = job.scenario_steps?.length === list.length;
     try {
-      for (let run = 0; run < repeat && !cancelRef.current; run++) {
-        for (let i = Math.min(from, list.length - 1); i < list.length; i++) {
-          if (cancelRef.current) break;
-          if (showProgress) setClientRun({ index: i, total: list.length });
-          const r = await runAction(job.id, worker.id, list[i]);
-          requestFrame.current();
-          if (!r.ok) { failed = i + 1; break; }
-          if (i < list.length - 1 && !list.some(s => s.action === 'wait')) await new Promise(res => setTimeout(res, 1200));
-        }
-        if (failed || cancelRef.current) break;
-        runs++;
-        if (run < repeat - 1) await new Promise(res => setTimeout(res, 500));
-      }
+      const result = await runScenario({ steps: list, from, repeats: repeat, cancelled: () => cancelRef.current,
+        beforeRepeat: async pass => { if (pass) await new Promise(res => setTimeout(res, 500)); runs = pass; },
+        onStep: i => { if (showProgress) setClientRun({ index: i, total: list.length }); },
+        execute: async step => { const r = await runAction(job.id, worker.id, step); requestFrame.current(); return r; },
+        afterStep: async i => { if (i < list.length - 1 && !list.some(s => s.action === 'wait')) await new Promise(res => setTimeout(res, 1200)); },
+      });
+      if (!result.ok && !result.stopped) failed = (result.index ?? 0) + 1;
+      if (result.ok) runs = repeat;
     } finally { setReplaying(false); setClientRun(null); }
     if (failed) toast(`Сбой на повторе ${runs + 1}, шаг ${failed}`, 'err');
     else if (cancelRef.current) toast(`Остановлено: ${runs} из ${repeat}`, 'err');

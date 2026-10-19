@@ -197,10 +197,10 @@
   }
   async function refreshStatus() {
     const result = await bridge('status');
-    const needsUpdate = result.ok && result.version !== '0.5.1';
+    const needsUpdate = result.ok && result.version !== '0.6.0';
     const badge = $('bridgeStatus');
     badge.classList.toggle('err', !result.ok || needsUpdate);
-    badge.textContent = needsUpdate ? '● Обновите расширение до 0.5.1' : result.ok ? (result.tab ? '● Chrome подключён' : '● Расширение установлено') : '● Расширение не найдено';
+    badge.textContent = needsUpdate ? '● Обновите расширение до 0.6.0' : result.ok ? (result.tab ? '● Chrome подключён' : '● Расширение установлено') : '● Расширение не найдено';
     tab = needsUpdate ? null : result.tab || null;
     $('connectedTab').textContent = tab ? `${tab.title || 'Вкладка'} · ${tab.url}` : 'Вкладка не подключена';
     $('chromeDetach').disabled = !tab;

@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { startTabs, stopJob, toast } from '../lib/api';
 import type { Job, Macro, Scenario, Step } from '../lib/types';
 
-interface Props { jobs: Job[]; scenarios: Scenario[]; macros: Macro[]; ownJob?: Job }
+interface Props { jobs: Job[]; scenarios: Scenario[]; macros: Macro[]; ownJob?: Job; onChrome: () => void }
 
 /** Форма «Открыть вкладки»: адрес, потоки, длительность, профиль, сценарий при открытии, заголовки. */
-export function StartForm({ jobs, scenarios, macros, ownJob }: Props) {
+export function StartForm({ jobs, scenarios, macros, ownJob, onChrome }: Props) {
   const [url, setUrl] = useState(() => localStorage.getItem('katya_last_url') || 'https://');
   const [workers, setWorkers] = useState(1);
   const [duration, setDuration] = useState(0);
@@ -53,7 +53,7 @@ export function StartForm({ jobs, scenarios, macros, ownJob }: Props) {
       <label>Способ запуска</label>
       <div className="method-switch" role="group" aria-label="Способ запуска">
         <button type="button" className="active" aria-pressed="true"><span>◈</span><b>Playwright</b><small>На сервере · выбран</small></button>
-        <button type="button" aria-pressed="false" onClick={() => { location.href = '/legacy/?method=chrome'; }}><span>◎</span><b>Мой Chrome</b><small>Через расширение</small></button>
+        <button type="button" aria-pressed="false" onClick={onChrome}><span>◎</span><b>Мой Chrome</b><small>Через расширение</small></button>
       </div>
 
       <label>Потоков (параллельных окон)</label>

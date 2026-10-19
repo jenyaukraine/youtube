@@ -32,6 +32,33 @@
   --green:var(--accent); --green2:var(--accent); --green-dim:var(--accent-dim); --green-glow:rgba(143,227,162,.25);
   --amber:var(--warn); --red:var(--rec); --radius:var(--r-l);
 }
+/* Startup unlock */
+.unlock-page{min-height:100vh;display:grid;place-items:center;padding:28px;position:relative;overflow:hidden;isolation:isolate}
+.unlock-halo{position:absolute;width:min(720px,95vw);aspect-ratio:1;left:50%;top:48%;transform:translate(-50%,-50%);z-index:-1;pointer-events:none;background:radial-gradient(circle,rgba(100,206,171,.16) 0%,rgba(91,105,221,.07) 38%,transparent 70%);filter:blur(15px)}
+.unlock-card{width:min(430px,100%);padding:40px 42px 35px;border:1px solid rgba(143,227,162,.24);border-radius:26px;background:linear-gradient(145deg,rgba(27,35,52,.96),rgba(13,18,30,.98));box-shadow:0 25px 100px rgba(0,0,0,.44),0 0 70px rgba(109,222,172,.08),inset 0 1px rgba(255,255,255,.08);text-align:center;position:relative}
+.unlock-card::before{content:"";position:absolute;inset:-1px;pointer-events:none;border-radius:inherit;background:linear-gradient(125deg,rgba(143,227,162,.65),transparent 25%,transparent 70%,rgba(153,119,236,.4));mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;padding:1px;opacity:.55}
+.unlock-logo{width:67px;height:67px;display:grid;place-items:center;margin:0 auto 25px;border-radius:19px;border:1px solid rgba(143,227,162,.42);color:var(--accent);background:linear-gradient(150deg,rgba(143,227,162,.21),rgba(97,92,184,.19));box-shadow:0 0 32px rgba(143,227,162,.16)}
+.unlock-logo svg{width:36px;height:36px;filter:drop-shadow(0 0 8px rgba(143,227,162,.58))}
+.unlock-kicker{margin:0 0 9px;color:var(--accent);font:700 10px var(--mono);letter-spacing:.2em}
+.unlock-card h1{margin:0;color:var(--txt);font-size:30px;line-height:1.16;letter-spacing:-.045em}
+.unlock-card h1 span{color:var(--accent)}
+.unlock-copy{color:var(--txt-2);font-size:13px;margin:11px 0 31px}
+.unlock-card form{text-align:left}
+.unlock-label{display:block;margin:0 0 9px;color:var(--txt-2);font-size:11px;letter-spacing:.12em}
+.unlock-pin-wrap{height:67px;border:1px solid var(--line-2);border-radius:13px;background:rgba(8,13,23,.8);position:relative;transition:border-color .2s,box-shadow .2s}
+.unlock-pin-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(143,227,162,.11),0 0 28px rgba(143,227,162,.07)}
+.unlock-pin-wrap input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:text;z-index:1}
+.unlock-dots{height:100%;display:flex;align-items:center;justify-content:center;gap:21px;pointer-events:none}
+.unlock-dots span{width:12px;height:12px;border-radius:50%;border:1px solid #688074;background:rgba(143,227,162,.05);transition:background .12s,box-shadow .12s,transform .12s}
+.unlock-dots span.filled{background:var(--accent);box-shadow:0 0 15px rgba(143,227,162,.58);transform:scale(1.1)}
+.unlock-error{font-size:12px;color:var(--rec);margin:9px 0 0}
+.unlock-submit{width:100%;height:52px;margin-top:20px;border:0;border-radius:12px;background:linear-gradient(115deg,#a6f2c3,#8ce2cf);color:#10221e;font:800 14px var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px;box-shadow:0 9px 29px rgba(114,230,184,.15);transition:filter .15s,transform .15s,box-shadow .15s}
+.unlock-submit:hover:not(:disabled){filter:brightness(1.08);box-shadow:0 12px 36px rgba(114,230,184,.28);transform:translateY(-1px)}
+.unlock-submit:disabled{opacity:.48;box-shadow:none}
+.unlock-submit span{font-size:19px;line-height:1}
+.unlock-enter{color:var(--txt-3);font:600 10px var(--mono);text-align:center;margin:17px 0 0}
+.unlock-checking{color:var(--txt-2);font-size:13px;padding:25px 0}
+@media(max-width:480px){.unlock-card{padding:34px 24px 30px}.unlock-card h1{font-size:27px}}
 html{color-scheme:dark}
 body{background:var(--bg);color:var(--txt);font-family:var(--font);line-height:1.45;-webkit-font-smoothing:antialiased}
 .bg-fx{background:radial-gradient(900px 500px at 80% -20%,rgba(143,227,162,.06),transparent 70%)}
@@ -630,3 +657,22 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var
 .chrome-update-button{display:block;width:100%;margin:12px 0 8px;padding:11px 14px;border:1px solid rgba(143,227,162,.48);border-radius:9px;background:rgba(72,177,120,.19);color:var(--accent);font:inherit;font-weight:800;cursor:pointer}
 .chrome-update-button:hover{background:rgba(72,177,120,.27)}
 .chrome-update-button:disabled{opacity:.55;cursor:wait}
+.chrome-react-grid{align-items:start}
+.chrome-control-card{position:sticky;top:14px;align-self:start}
+.chrome-react-workspace{min-width:0}
+.chrome-react-workspace .chrome-shot{width:100%;min-height:260px}
+.chrome-react-workspace .chrome-shot img{width:100%;height:auto;display:block}
+.chrome-react-workspace .chrome-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 12px}
+.chrome-react-workspace .chrome-mode-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt-2);font-size:12px;font-weight:800}
+.chrome-control-card .chrome-connection small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt-3)}
+.chrome-control-card .chrome-connection .connected{color:var(--accent)}
+.chrome-control-card .chrome-connection .error{color:var(--rec)}
+.chrome-control-card .chrome-tab-list{display:grid;gap:6px;max-height:220px;overflow:auto;margin-top:8px}
+.chrome-control-card .chrome-tab-list button{width:100%;padding:8px 10px;text-align:left;border:1px solid var(--line-2);border-radius:8px;background:var(--surface-2);color:var(--txt)}
+.chrome-control-card .chrome-tab-list small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt-3)}
+.chrome-react-workspace .scenario-panel{margin-top:14px}
+.chrome-react-workspace .chrome-media-state{margin-top:10px}
+.diagnostics,.automation-section{margin-top:16px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);padding:10px 12px}
+.diagnostics>summary,.automation-section>summary{cursor:pointer;color:var(--txt-2);font-size:12px;font-weight:800}
+.diagnostics .log,.automation-section .auto-card{margin:12px 0 0}
+@media(max-width:900px){.chrome-control-card{position:static}}
