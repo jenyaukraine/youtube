@@ -553,7 +553,7 @@ async def browser_action(job_id: str, worker_id: str, req: BrowserAction):
                 await page.mouse.move(px, py)
             await page.mouse.wheel(0, max(-3000, min(3000, int(req.value or "500"))))
         elif req.action == "press":
-            await page.keyboard.press(req.value, timeout=7000)
+            await page.keyboard.press(req.value)
         elif req.action == "type":
             await page.keyboard.type(req.value, delay=0)
         else:
