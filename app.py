@@ -2,7 +2,6 @@
 import asyncio
 import json
 import os
-import random
 import re
 import time
 import uuid
@@ -54,6 +53,7 @@ class Job:
         self.status = "pending"         # pending|running|stopped
         self.created = time.time()
         self.pages: Dict[str, Page] = {}
+        self.worker_tasks: Dict[str, asyncio.Task] = {}
         self.stop_flag = False
         self.stop_lock = asyncio.Lock()
         self.screenshots: Dict[str, tuple] = {}
@@ -129,16 +129,6 @@ def log(msg):
     if len(LOGS) > 500:
         del LOGS[:-500]
 
-# ---------------- user agents (rotation) ----------------
-UAS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
-]
-
 def parse_video_id(url: str) -> Optional[str]:
     import re
     m = re.search(r"(?:youtu\.be/|v=|/videos/|embed/|shorts/)([A-Za-z0-9_-]{11})", url)
@@ -153,16 +143,13 @@ async def worker_loop(job: Job, w: Worker, page: Page):
     w.state = "starting"
     base = f"https://www.youtube.com/watch?v={parse_video_id(job.url)}"
     try:
-        # random-ish entry
         await page.goto(base, wait_until="domcontentloaded", timeout=60000)
-        await asyncio.sleep(random.uniform(1.5, 4.0))
         w.state = "checking"
         w.last_action = "Проверяю воспроизведение"
         log(f"worker {w.id} loaded {job.url[:40]}")
 
         last_tick = time.time()
         last_video_time = None
-        next_refresh = time.time() + random.uniform(25, 45)
         while not job.stop_flag and w.state != "stopped":
             await asyncio.sleep(1)
             now = time.time()
@@ -171,11 +158,11 @@ async def worker_loop(job: Job, w: Worker, page: Page):
 
             try:
                 playback = await page.evaluate("""() => {
-                  const text = (document.body?.innerText || '').slice(0, 2500);
+                  const text = document.body?.innerText || '';
                   const video = document.querySelector('video');
                   return {
                     consent: location.hostname.startsWith('consent.') ||
-                      /Прежде чем перейти к YouTube|Before you continue to YouTube|Принять все|Accept all/i.test(text),
+                      /Прежде чем перейти к YouTube|Before you continue to YouTube|Bevor Sie zu YouTube weitergehen|Avant de continuer sur YouTube|Перш ніж перейти на YouTube|Принять все|Accept all|Alle akzeptieren/i.test(text),
                     time: video ? video.currentTime : null,
                     paused: video ? video.paused : true,
                     ready: video ? video.readyState : 0
@@ -202,53 +189,8 @@ async def worker_loop(job: Job, w: Worker, page: Page):
                 w.last_action = f"Проверка плеера: {str(e)[:35]}"
                 last_video_time = None
 
-            # periodic "human" touch: nudge so it doesn't look frozen
-            try:
-                await page.mouse.move(random.randint(120, 900), random.randint(200, 500), steps=3)
-            except Exception:
-                pass
-
-            if w.state == "watching" and now >= next_refresh:
-                # simulate a real viewer: occasionally restart / small seek
-                r = random.random()
-                try:
-                    if r < 0.25:
-                        # hard reload to look like a new visit
-                        w.loop += 1
-                        w.last_action = f"reload #{w.loop}"
-                        w.state = "reloading"
-                        async with job.page_locks.setdefault(w.id, asyncio.Lock()):
-                            await page.reload(wait_until="domcontentloaded", timeout=60000)
-                        await asyncio.sleep(random.uniform(1.5, 3.5))
-                        w.state = "checking"
-                        last_video_time = None
-                    else:
-                        # small forward seek to keep "active"
-                        w.last_action = "seek"
-                        await page.evaluate(
-                            "if(window.player){window.player.seekTo(window.player.getCurrentTime()+5, true);}"
-                        )
-                except Exception as e:
-                    w.last_action = f"touch:{str(e)[:30]}"
-                next_refresh = time.time() + random.uniform(25, 45)
-
-            # if video ended, auto-restart to keep accruing
-            try:
-                ended = await page.evaluate(
-                    "window.player ? (window.player.getCurrentTime() >= window.player.getDuration() - 1.5) : false"
-                )
-                if ended and w.state == "watching":
-                    w.loop += 1
-                    w.last_action = f"restarted #{w.loop}"
-                    try:
-                        await page.evaluate("if(window.player){window.player.seekTo(0, true); window.player.playVideo();}")
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
             # honor duration cap
-            if job.duration > 0 and w.watch_seconds >= job.duration:
+            if job.duration > 0 and now - w.started >= job.duration:
                 w.last_action = "duration reached"
                 break
     except Exception as e:
@@ -281,18 +223,20 @@ async def run_job(job: Job):
                 )
                 BROWSERS[job.id] = browser
         browser = BROWSERS[job.id]
+        language_header = next((value for name, value in job.headers.items() if name.lower() == "accept-language"), "")
+        requested_locale = language_header.split(",", 1)[0].split(";", 1)[0].strip()
+        locale = requested_locale if re.fullmatch(r"[a-z]{2}(?:-[A-Z]{2})?", requested_locale) else "ru-RU"
 
         for i in range(job.workers):
             if job.stop_flag:
                 break
-            w = Worker(f"{job.id}-{i}", job.url, cookies=job.cookies, ua=random.choice(UAS))
+            w = Worker(f"{job.id}-{i}", job.url, cookies=job.cookies)
             job.workers_list.append(w)
             # own context per worker => isolated cookies/account + UA
             ctx = await browser.new_context(
-                user_agent=w.ua,
                 extra_http_headers=job.headers,
-                viewport={"width": random.randint(1280, 1520), "height": random.randint(720, 900)},
-                locale=random.choice(["en-US", "ru-RU", "de-DE", "fr-FR"]),
+                viewport={"width": 1365, "height": 768},
+                locale=locale,
                 device_scale_factor=1,
             )
             if job.cookies:
@@ -302,8 +246,10 @@ async def run_job(job: Job):
                     log(f"cookie load failed for {w.id}: {str(e)[:80]}")
             page = await ctx.new_page()
             job.pages[w.id] = page
-            tasks.append(asyncio.create_task(worker_loop(job, w, page)))
-            await asyncio.sleep(random.uniform(0.5, 2.0))  # stagger starts
+            task = asyncio.create_task(worker_loop(job, w, page))
+            job.worker_tasks[w.id] = task
+            tasks.append(task)
+            await asyncio.sleep(0.5)
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
     except Exception as e:
@@ -322,12 +268,15 @@ async def stop_job(job: Job):
         log(f"job {job.id} stopping")
         for w in job.workers_list:
             w.state = "stopped"
+        for task in job.worker_tasks.values():
+            task.cancel()
         for wid, page in list(job.pages.items()):
             try:
                 await page.context.close()
             except Exception:
                 pass
         job.pages.clear()
+        job.worker_tasks.clear()
         job.screenshots.clear()
         job.screenshot_locks.clear()
         job.page_locks.clear()
@@ -426,6 +375,9 @@ async def stop_worker(job_id: str, worker_id: str):
         return JSONResponse({"ok": False, "error": "Вкладка не найдена"}, status_code=404)
     worker.state = "stopped"
     worker.last_action = "stopped by user"
+    task = job.worker_tasks.pop(worker_id, None)
+    if task:
+        task.cancel()
     job.screenshots.pop(worker_id, None)
     job.screenshot_locks.pop(worker_id, None)
     job.page_locks.pop(worker_id, None)
@@ -434,6 +386,8 @@ async def stop_worker(job_id: str, worker_id: str):
     except Exception:
         pass
     log(f"worker {worker_id} stopped by user")
+    if not job.pages:
+        asyncio.create_task(stop_job(job))
     return {"ok": True}
 
 @app.post("/api/worker/{job_id}/{worker_id}/reload")
@@ -449,6 +403,7 @@ async def reload_worker(job_id: str, worker_id: str):
         async with job.page_locks.setdefault(worker_id, asyncio.Lock()):
             await page.reload(wait_until="domcontentloaded", timeout=30000)
         worker.state = "checking"
+        worker.loop += 1
         job.screenshots.pop(worker_id, None)
         return {"ok": True}
     except Exception as e:
