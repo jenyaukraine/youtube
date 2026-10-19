@@ -8,7 +8,7 @@ import uuid
 from typing import Dict, List, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from playwright.async_api import async_playwright, Browser, Page, Playwright
@@ -55,6 +55,8 @@ class Job:
         self.pages: Dict[str, Page] = {}
         self.stop_flag = False
         self.stop_lock = asyncio.Lock()
+        self.screenshots: Dict[str, tuple] = {}
+        self.screenshot_locks: Dict[str, asyncio.Lock] = {}
 
     def total_watch(self):
         return sum(w.watch_seconds for w in self.workers_list)
@@ -289,6 +291,8 @@ async def stop_job(job: Job):
             except Exception:
                 pass
         job.pages.clear()
+        job.screenshots.clear()
+        job.screenshot_locks.clear()
         async with BROWSER_LOCK:
             browser = BROWSERS.pop(job.id, None)
             if browser:
@@ -362,12 +366,38 @@ async def stop_worker(job_id: str, worker_id: str):
         return JSONResponse({"ok": False, "error": "Вкладка не найдена"}, status_code=404)
     worker.state = "stopped"
     worker.last_action = "stopped by user"
+    job.screenshots.pop(worker_id, None)
+    job.screenshot_locks.pop(worker_id, None)
     try:
         await page.context.close()
     except Exception:
         pass
     log(f"worker {worker_id} stopped by user")
     return {"ok": True}
+
+@app.get("/api/worker/{job_id}/{worker_id}/screenshot")
+async def worker_screenshot(job_id: str, worker_id: str):
+    job = JOBS.get(job_id)
+    if not job or job.status != "running" or worker_id not in job.pages:
+        return JSONResponse({"error": "Вкладка не найдена"}, status_code=404)
+    # The dashboard is public. Never expose an authenticated browser session.
+    if job.cookies:
+        return JSONResponse({"error": "Скриншот аккаунта недоступен"}, status_code=403)
+    lock = job.screenshot_locks.setdefault(worker_id, asyncio.Lock())
+    async with lock:
+        cached = job.screenshots.get(worker_id)
+        if cached and time.monotonic() - cached[0] < 15:
+            return Response(cached[1], media_type="image/jpeg", headers={"Cache-Control": "private, max-age=10"})
+        page = job.pages.get(worker_id)
+        if not page or page.is_closed():
+            return JSONResponse({"error": "Вкладка закрыта"}, status_code=404)
+        try:
+            # Capture only the public video player, excluding page chrome and account UI.
+            image = await page.locator("#movie_player").screenshot(type="jpeg", quality=45, timeout=6000)
+        except Exception:
+            return JSONResponse({"error": "Снимок пока недоступен"}, status_code=503)
+        job.screenshots[worker_id] = (time.monotonic(), image)
+        return Response(image, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=10"})
 
 @app.websocket("/ws")
 async def ws(websocket: WebSocket):

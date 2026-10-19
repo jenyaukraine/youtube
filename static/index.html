@@ -210,6 +210,12 @@ input::placeholder{color:#738198}.hint{font-size:11.5px;color:var(--txt3);line-h
 .system-chart{display:block;width:100%;height:112px;margin:12px 0 5px;overflow:visible}.system-chart .grid-line{stroke:#354050;stroke-width:1;stroke-dasharray:3 6}.system-chart .cpu-line{fill:none;stroke:var(--green);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}.system-chart .cpu-area{fill:rgba(167,243,107,.11)}
 .system-foot{display:flex;gap:15px;flex-wrap:wrap;font-size:11px;color:var(--txt3)}.system-foot b{color:var(--txt2);font-weight:800}
 .worker-stop{border:1px solid #5c4b54;border-radius:8px;background:#261c25;color:#ff9ba3;padding:7px 9px;font:700 11px 'Manrope',sans-serif;cursor:pointer}.worker-stop:hover{background:#38242b;border-color:var(--red)}
+.worker{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:12px}
+.worker-preview{position:relative;grid-column:1/-1;aspect-ratio:16/9;max-height:270px;overflow:hidden;border:1px solid #354153;border-radius:10px;background:#090d14;display:grid;place-items:center;color:var(--txt3);font-size:12px}
+.worker-preview img{width:100%;height:100%;object-fit:contain;display:block}
+.worker-preview .preview-note{position:absolute;inset:0;display:grid;place-items:center;background:#090d14;color:var(--txt3)}
+.worker-preview [hidden]{display:none}
+.worker-meta{display:flex;align-items:center;gap:12px;min-width:0}.worker-meta .act{min-width:0}.worker .secs{white-space:nowrap}
 footer{margin-top:24px;color:var(--txt3)}.toast{background:#202938;border-color:#475567}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.goal{align-items:stretch}.goal .pct{margin-left:0}.wrap{padding:22px 18px 45px}}
 @media(max-width:600px){header{align-items:flex-start}.brand h1{font-size:20px}.brand p{font-size:11px}.logo{width:48px;height:48px}.badge{font-size:10px;padding:9px 10px}.badge .dot{width:8px;height:8px}.goal{padding:24px}.goal .big{font-size:43px}.goal .pct{width:100%}.card{padding:20px}.totals{grid-template-columns:1fr 1fr}.tile:last-child{grid-column:span 2}.worker{flex-wrap:wrap}.worker .act{order:3;text-align:left;flex-basis:100%}}
@@ -448,14 +454,34 @@ function render(data){
   if(!allWorkers.length){
     panel.innerHTML = '<div class="empty">Нет активных вкладок.<br><b>После запуска состояние появится здесь.</b></div>';
   } else {
-    panel.innerHTML = allWorkers.map(w => `
-      <div class="worker">
-        <span class="st ${w.state}"></span>
-        <span class="name">W-${w.id.split('-').pop()}</span>
-        <span class="act">${escapeHtml(w.last_action || w.state)}${w.error ? ' · '+escapeHtml(w.error) : ''}</span>
-        <span class="secs">${(w.watch_seconds/3600).toFixed(3)} ч</span>
-        <button type="button" class="worker-stop" data-job="${escapeHtml(w._j.id)}" data-worker="${escapeHtml(w.id)}">Закрыть</button>
-      </div>`).join('');
+    panel.querySelector('.empty')?.remove();
+    const wanted = new Set(allWorkers.map(w => w.id));
+    panel.querySelectorAll('.worker').forEach(card => { if(!wanted.has(card.dataset.id)) card.remove(); });
+    allWorkers.forEach(w => {
+      let card = [...panel.querySelectorAll('.worker')].find(el => el.dataset.id === w.id);
+      if(!card){
+        card = document.createElement('div');
+        card.className = 'worker'; card.dataset.id = w.id;
+        card.innerHTML = `<div class="worker-preview"><span class="preview-note">Ожидаю кадр…</span><img alt="Снимок вкладки" hidden></div>
+          <div class="worker-meta"><span class="st"></span><span class="name"></span><span class="act"></span><span class="secs"></span></div>
+          <button type="button" class="worker-stop">Закрыть</button>`;
+        const img = card.querySelector('img');
+        img.onload = () => { img.hidden = false; card.querySelector('.preview-note').hidden = true; };
+        img.onerror = () => { if(img.hidden) card.querySelector('.preview-note').textContent = 'Снимок появится после загрузки видео'; };
+        panel.append(card);
+      }
+      card.querySelector('.st').className = 'st ' + w.state;
+      card.querySelector('.name').textContent = 'W-' + w.id.split('-').pop();
+      card.querySelector('.act').textContent = w.last_action || w.state;
+      card.querySelector('.secs').textContent = (w.watch_seconds/3600).toFixed(3) + ' ч';
+      const button = card.querySelector('.worker-stop');
+      button.dataset.job = w._j.id; button.dataset.worker = w.id;
+      const bucket = Math.floor(Date.now()/20000);
+      if(card.dataset.shotBucket !== String(bucket)){
+        card.dataset.shotBucket = String(bucket);
+        card.querySelector('img').src = `/api/worker/${encodeURIComponent(w._j.id)}/${encodeURIComponent(w.id)}/screenshot?t=${bucket}`;
+      }
+    });
   }
 
   // log
