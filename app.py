@@ -627,6 +627,12 @@ async def browser_action(job_id: str, worker_id: str, req: ActionReq,
         return JSONResponse({"ok": False, "error": error}, status_code=400)
     async with job.page_lock(worker_id):
         result = await run_step(page, step, screenshot_sink=make_screenshot_sink(worker_id))
+        if result["ok"] and step.action in {"type", "fill"}:
+            try:
+                result["input_type"] = await page.evaluate(
+                    "() => (document.activeElement?.getAttribute('type') || '').toLowerCase()")
+            except Exception:
+                result["input_type"] = ""
     if not result["ok"]:
         return JSONResponse(result, status_code=503 if "Не удалось" in result["error"] else 400)
     worker = next((w for w in job.workers_list if w.id == worker_id), None)

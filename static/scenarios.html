@@ -104,6 +104,8 @@ async function runScenario(){
     for(let n=1;n<=count;n++){
       if(cancelled)break;
       const values=valuesFor(s,n),startUrl=substitute(s.startUrl,values);
+      const missing=[...new Set(s.steps.flatMap(step=>[...String(step.value||'').matchAll(/{{\s*([a-zA-Z][\w]*)\s*}}/g)].map(match=>match[1])))].filter(name=>!values[name]);
+      if(missing.length)throw Error('Заполни переменные перед запуском: '+missing.join(', '));
       $('runProgress').textContent=`Повтор ${n}/${count} · открываю страницу`;
       const started=await call('POST','/api/start',{url:startUrl,workers:1,duration:0});currentJob=started.id;
       try{

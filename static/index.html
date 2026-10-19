@@ -498,12 +498,17 @@ async function runAction(card, payload, options={}){
     const data = await r.json();
     if(!options.quiet) toast(data.ok ? (payload.action==='inspect' ? 'Элемент выбран' : 'Действие выполнено') : (data.error || 'Действие не выполнено'),data.ok ? 'ok' : 'err');
     if(data.ok && card.dataset.recording==='1' && options.record!==false && payload.action!=='inspect'){
-      if(['type','fill'].includes(payload.action)){
-        if(card._steps.at(-1)?.action !== payload.action){
-          card._inputVarCount=(card._inputVarCount||0)+1;
-          card._steps.push({...payload,value:`{{input${card._inputVarCount}}}`});
-        }
-      }else card._steps.push(payload);
+      if(payload.action==='type'){
+        const secret=data.input_type==='password';
+        const last=card._steps.at(-1);
+        if(last?.action==='type' && card._lastRecordedInputType===data.input_type){
+          if(!secret) last.value+=payload.value;
+        }else card._steps.push({...payload,value:secret?'{{password}}':payload.value});
+        card._lastRecordedInputType=data.input_type;
+      }else{
+        card._lastRecordedInputType=null;
+        card._steps.push(payload.action==='fill' && data.input_type==='password' ? {...payload,value:'{{password}}'} : payload);
+      }
       renderSteps(card);
     }
     if(data.ok && payload.action!=='inspect' && options.refresh!==false){
@@ -699,6 +704,9 @@ $('workersPanel').addEventListener('click', async e => {
       try{ await navigator.clipboard.writeText(JSON.stringify(card._steps||[],null,2)); toast('Шаги скопированы как JSON'); }catch{ toast('Не удалось скопировать','err'); }
     }else{
       const steps=[...(card._steps||[])]; if(!steps.length){ toast('Нет записанных шагов','err'); return; }
+      if(steps.some(step=>/{{\s*[a-zA-Z][\w]*\s*}}/.test(step.value||''))){
+        toast('В записи есть переменные. Задай их на странице «Сценарии»','err'); return;
+      }
       e.target.disabled=true;
       let completed=0;
       for(const step of steps){ const result=await runAction(card,step,{quiet:true,record:false,refresh:false}); if(!result?.ok) break; completed++; await new Promise(resolve=>setTimeout(resolve,500)); }
