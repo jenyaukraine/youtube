@@ -235,6 +235,34 @@ async def katya_notify_test() -> str:
 
 
 @mcp.tool()
+async def katya_schedules() -> str:
+    """List scheduled macro runs with their next_run, last_run and last_result."""
+    return _pretty(await _call("GET", "/api/schedules"))
+
+
+@mcp.tool()
+async def katya_schedule_add(macro_name: str, cron: str = "", every_minutes: int = 0, url: str = "",
+                             enabled: bool = True, workers: int = 1, schedule_id: str = "") -> str:
+    """Schedule a saved macro: `cron` (5 fields, e.g. "0 9 * * 1-5", "*/30 * * * *") or `every_minutes`.
+    Empty url = the macro's start_url. Pass schedule_id to update an existing schedule."""
+    payload = {"id": schedule_id, "macro_name": macro_name, "cron": cron, "every_minutes": every_minutes,
+               "url": url, "enabled": enabled, "workers": workers}
+    return _pretty(await _call("POST", "/api/schedules", json=payload))
+
+
+@mcp.tool()
+async def katya_schedule_delete(schedule_id: str) -> str:
+    """Delete a schedule by id."""
+    return _pretty(await _call("DELETE", f"/api/schedules/{schedule_id}"))
+
+
+@mcp.tool()
+async def katya_schedule_run(schedule_id: str) -> str:
+    """Run a schedule's macro right now (in a new tab that closes when the macro finishes)."""
+    return _pretty(await _call("POST", f"/api/schedules/{schedule_id}/run"))
+
+
+@mcp.tool()
 async def katya_files() -> str:
     """List stored files: screenshots taken with the `screenshot` step and browser downloads."""
     return _pretty(await _call("GET", "/api/files"))

@@ -9,3 +9,4 @@ data/
 *.db
 web/node_modules/
 web/dist/
+schedules.json
