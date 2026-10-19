@@ -522,6 +522,15 @@ def find_page(job_id: str, worker_id: str):
     return job, page
 
 
+def writer_authorized(api_token: Optional[str], job_id: Optional[str], control_token: Optional[str]) -> bool:
+    """Writes to triggers/macros: agents use the API token; the dashboard proves itself with a tab it opened."""
+    if is_api_token(api_token):
+        return True
+    job = JOBS.get(job_id or "")
+    return bool(job and job.status == "running" and control_token
+                and secrets.compare_digest(control_token, job.control_token))
+
+
 def forbidden():
     return JSONResponse({"ok": False, "error": "Нет доступа"}, status_code=403)
 
@@ -784,8 +793,10 @@ async def list_triggers():
 
 
 @app.post("/api/triggers")
-async def add_trigger(trigger: Trigger, x_katya_token: Optional[str] = Header(default=None)):
-    if not is_api_token(x_katya_token):
+async def add_trigger(trigger: Trigger, x_katya_token: Optional[str] = Header(default=None),
+                      x_katya_job: Optional[str] = Header(default=None),
+                      x_katya_control_token: Optional[str] = Header(default=None)):
+    if not writer_authorized(x_katya_token, x_katya_job, x_katya_control_token):
         return forbidden()
     error = validate_trigger(trigger)
     if error:
@@ -798,8 +809,10 @@ async def add_trigger(trigger: Trigger, x_katya_token: Optional[str] = Header(de
 
 
 @app.delete("/api/triggers/{trigger_id}")
-async def delete_trigger(trigger_id: str, x_katya_token: Optional[str] = Header(default=None)):
-    if not is_api_token(x_katya_token):
+async def delete_trigger(trigger_id: str, x_katya_token: Optional[str] = Header(default=None),
+                         x_katya_job: Optional[str] = Header(default=None),
+                         x_katya_control_token: Optional[str] = Header(default=None)):
+    if not writer_authorized(x_katya_token, x_katya_job, x_katya_control_token):
         return forbidden()
     if not TRIGGERS.remove(trigger_id):
         return JSONResponse({"ok": False, "error": "Триггер не найден"}, status_code=404)
@@ -808,8 +821,10 @@ async def delete_trigger(trigger_id: str, x_katya_token: Optional[str] = Header(
 
 @app.post("/api/triggers/{trigger_id}/enabled")
 async def toggle_trigger(trigger_id: str, enabled: bool = Query(...),
-                         x_katya_token: Optional[str] = Header(default=None)):
-    if not is_api_token(x_katya_token):
+                         x_katya_token: Optional[str] = Header(default=None),
+                         x_katya_job: Optional[str] = Header(default=None),
+                         x_katya_control_token: Optional[str] = Header(default=None)):
+    if not writer_authorized(x_katya_token, x_katya_job, x_katya_control_token):
         return forbidden()
     if not TRIGGERS.set_enabled(trigger_id, enabled):
         return JSONResponse({"ok": False, "error": "Триггер не найден"}, status_code=404)
@@ -844,9 +859,15 @@ async def list_macros():
 async def save_macro(macro: Macro, x_katya_token: Optional[str] = Header(default=None),
                      x_katya_job: Optional[str] = Header(default=None),
                      x_katya_control_token: Optional[str] = Header(default=None)):
-    job = JOBS.get(x_katya_job or "")
-    if not is_api_token(x_katya_token) and not (job and authorized(job, x_katya_control_token or "", None)):
+    if not writer_authorized(x_katya_token, x_katya_job, x_katya_control_token):
         return forbidden()
+    headers = macro.settings.get("headers") if isinstance(macro.settings, dict) else None
+    if headers is not None:
+        if not isinstance(headers, dict):
+            return JSONResponse({"ok": False, "error": "settings.headers должен быть объектом"}, status_code=400)
+        header_error = validate_headers(headers)
+        if header_error:
+            return JSONResponse({"ok": False, "error": header_error}, status_code=400)
     for step in macro.steps:
         error = validate_step(step)
         if error:
@@ -860,8 +881,10 @@ async def save_macro(macro: Macro, x_katya_token: Optional[str] = Header(default
 
 
 @app.delete("/api/macros/{name}")
-async def delete_macro(name: str, x_katya_token: Optional[str] = Header(default=None)):
-    if not is_api_token(x_katya_token):
+async def delete_macro(name: str, x_katya_token: Optional[str] = Header(default=None),
+                       x_katya_job: Optional[str] = Header(default=None),
+                       x_katya_control_token: Optional[str] = Header(default=None)):
+    if not writer_authorized(x_katya_token, x_katya_job, x_katya_control_token):
         return forbidden()
     macros = load_macros()
     if macros.pop(name, None) is None:

@@ -63,6 +63,8 @@ class Macro(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     steps: List[Step] = Field(min_length=1, max_length=200)
     description: str = ""
+    start_url: str = ""                       # page the scenario was recorded on
+    settings: Dict[str, Any] = {}             # launch settings: headers, user_agent_mode, profile, dialogs
 
 
 def normalize_url(raw: str) -> Optional[str]:
