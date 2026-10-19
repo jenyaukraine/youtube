@@ -24,7 +24,7 @@ class Worker:
         self.url = url
         self.cookies = cookies or []
         self.ua = ua
-        self.state = "starting"      # starting|watching|reloading|error|stopped
+        self.state = "starting"      # starting|checking|blocked|paused|watching|reloading|error|stopped
         self.watch_seconds = 0.0
         self.loop = 0
         self.last_action = ""
@@ -154,18 +154,51 @@ async def worker_loop(job: Job, w: Worker, page: Page):
         # random-ish entry
         await page.goto(base, wait_until="domcontentloaded", timeout=60000)
         await asyncio.sleep(random.uniform(1.5, 4.0))
-        w.state = "watching"
-        w.last_action = "loaded"
-        log(f"worker {w.id} started watching {job.url[:40]}")
+        w.state = "checking"
+        w.last_action = "Проверяю воспроизведение"
+        log(f"worker {w.id} loaded {job.url[:40]}")
 
         last_tick = time.time()
+        last_video_time = None
         next_refresh = time.time() + random.uniform(25, 45)
         while not job.stop_flag and w.state != "stopped":
             await asyncio.sleep(1)
             now = time.time()
-            if w.state == "watching":
-                w.watch_seconds += (now - last_tick)
+            elapsed = now - last_tick
             last_tick = now
+
+            try:
+                playback = await page.evaluate("""() => {
+                  const text = (document.body?.innerText || '').slice(0, 2500);
+                  const video = document.querySelector('video');
+                  return {
+                    consent: location.hostname.startsWith('consent.') ||
+                      /Прежде чем перейти к YouTube|Before you continue to YouTube|Принять все|Accept all/i.test(text),
+                    time: video ? video.currentTime : null,
+                    paused: video ? video.paused : true,
+                    ready: video ? video.readyState : 0
+                  };
+                }""")
+                video_time = playback["time"]
+                progress = video_time - last_video_time if video_time is not None and last_video_time is not None else 0
+                if playback["consent"]:
+                    w.state = "blocked"
+                    w.last_action = "Окно согласия YouTube"
+                elif video_time is None:
+                    w.state = "checking"
+                    w.last_action = "Видео не найдено"
+                elif not playback["paused"] and playback["ready"] >= 2 and 0.15 < progress <= elapsed + 0.5:
+                    w.state = "watching"
+                    w.last_action = "Видео воспроизводится"
+                    w.watch_seconds += progress
+                else:
+                    w.state = "paused"
+                    w.last_action = "Видео не воспроизводится"
+                last_video_time = video_time
+            except Exception as e:
+                w.state = "checking"
+                w.last_action = f"Проверка плеера: {str(e)[:35]}"
+                last_video_time = None
 
             # periodic "human" touch: nudge so it doesn't look frozen
             try:
@@ -184,7 +217,8 @@ async def worker_loop(job: Job, w: Worker, page: Page):
                         w.state = "reloading"
                         await page.reload(wait_until="domcontentloaded", timeout=60000)
                         await asyncio.sleep(random.uniform(1.5, 3.5))
-                        w.state = "watching"
+                        w.state = "checking"
+                        last_video_time = None
                     else:
                         # small forward seek to keep "active"
                         w.last_action = "seek"
@@ -219,8 +253,7 @@ async def worker_loop(job: Job, w: Worker, page: Page):
         w.error = str(e)[:200]
         log(f"worker {w.id} error: {str(e)[:120]}")
     finally:
-        if not job.stop_flag:
-            w.state = "stopped"
+        w.state = "stopped"
 
 # ---------------- job runner ----------------
 async def run_job(job: Job):
