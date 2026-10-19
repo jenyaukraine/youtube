@@ -450,7 +450,10 @@ async function runAction(card, payload, options={}){
       }else card._steps.push(payload);
       renderSteps(card);
     }
-    if(data.ok && payload.action!=='inspect' && options.refresh!==false) setTimeout(() => { if(card.isConnected) loadShot(card,true); }, payload.action === 'navigate' ? 2500 : 800);
+    if(data.ok && payload.action!=='inspect' && options.refresh!==false){
+      if(data.url) card.querySelector('.worker-url').textContent=data.url;
+      setTimeout(() => { if(card.isConnected) loadShot(card,true); }, 100);
+    }
     return data;
   }catch(e){ if(!options.quiet) toast('Ошибка управления: ' + e.message,'err'); return null; }
   finally{ run.disabled = false; }
