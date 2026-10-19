@@ -215,6 +215,26 @@ async def katya_macro_run(name: str, job_id: str, worker_id: str) -> str:
 
 
 @mcp.tool()
+async def katya_runs(limit: int = 20, macro: str = "", source: str = "") -> str:
+    """Scenario run history, newest first: ok, steps completed/total, error, screenshot file name.
+    `macro` filters by macro or trigger name; `source` by startup|steps|macro|trigger."""
+    params = {"limit": limit, "macro": macro, "source": source}
+    return _pretty(await _call("GET", "/api/runs", params=params))
+
+
+@mcp.tool()
+async def katya_run_get(run_id: str) -> str:
+    """One run record by id (from katya_runs or the run_id returned by katya_run / katya_macro_run)."""
+    return _pretty(await _call("GET", f"/api/runs/{run_id}"))
+
+
+@mcp.tool()
+async def katya_notify_test() -> str:
+    """Send a test notification to the configured Telegram chat / Discord webhook (see /api/notify)."""
+    return _pretty(await _call("POST", "/api/notify/test"))
+
+
+@mcp.tool()
 async def katya_files() -> str:
     """List stored files: screenshots taken with the `screenshot` step and browser downloads."""
     return _pretty(await _call("GET", "/api/files"))

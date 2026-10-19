@@ -8,7 +8,7 @@ import secrets
 import sys
 import time
 import uuid
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import FastAPI, Header, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -19,6 +19,8 @@ from playwright.async_api import async_playwright, Browser, Page, Playwright
 from katya.actions import Macro, Step, normalize_url, run_step, run_steps, validate_step
 from katya.profiles import PROFILES, context_options, find_profile
 from katya.actions import locate
+from katya.history import RunHistory
+from katya import notify as notifications
 from katya.triggers import Condition, Trigger, TriggerEngine, validate_trigger
 
 app = FastAPI(title="Katya Browser Lab")
@@ -28,6 +30,8 @@ STATIC = os.path.join(ROOT, "static")
 DATA = os.environ.get("KATYA_DATA_DIR", os.path.join(ROOT, "data"))
 FILES_DIR = os.path.join(DATA, "files")
 MACROS_PATH = os.path.join(DATA, "macros.json")
+RUNS_PATH = os.path.join(DATA, "runs.json")
+NOTIFY_PATH = os.path.join(DATA, "notify.json")
 HEADLESS = os.environ.get("KATYA_HEADLESS", "1") not in ("0", "false", "no")
 BROWSER_CHANNEL = os.environ.get("KATYA_BROWSER_CHANNEL", "").strip()
 if not BROWSER_CHANNEL and os.name == "nt":
@@ -174,7 +178,38 @@ def log(msg):
         del LOGS[:-500]
 
 
-TRIGGERS = TriggerEngine(os.path.join(DATA, "triggers.json"), log=log)
+# ---------------- run history and notifications ----------------
+HISTORY = RunHistory(RUNS_PATH, limit=500, log=log)
+
+
+async def _notify_run(record) -> None:
+    settings = notifications.load_settings(NOTIFY_PATH)
+    if not settings.enabled:
+        return
+    outcome = await notifications.notify(record, settings, log=log)
+    if outcome.get("sent"):
+        log(f"run {record.id}: уведомление отправлено ({', '.join(outcome['sent'])})")
+
+
+def _on_run_finished(record) -> None:
+    """History hook: notify in the background, never block the scenario."""
+    try:
+        asyncio.get_running_loop().create_task(_notify_run(record))
+    except RuntimeError:
+        pass
+
+
+HISTORY.on_finish = _on_run_finished
+
+
+async def _record_trigger_run(trigger, page, worker_id, job_id, result, started, screenshot_sink) -> None:
+    """TriggerEngine.on_run callback: one history record per reaction."""
+    record = HISTORY.begin("trigger", steps=trigger.then, job_id=job_id, worker_id=worker_id,
+                           url=page.url, macro_name=trigger.name, started=started)
+    await HISTORY.complete(record, result, page=page, screenshot_sink=screenshot_sink)
+
+
+TRIGGERS = TriggerEngine(os.path.join(DATA, "triggers.json"), log=log, on_run=_record_trigger_run)
 
 
 def system_metrics():
@@ -292,11 +327,13 @@ async def worker_loop(job: Job, w: Worker, page: Page):
                 w.last_action = (f"Сценарий: шаг {index + 1}/{w.scenario_total} · {job.steps[index].action}"
                                  if phase == "running" else
                                  f"Сценарий: {w.scenario_completed}/{w.scenario_total} шагов")
+            record = HISTORY.begin("startup", steps=job.steps, job_id=job.id, worker_id=w.id, url=job.url)
             result = await run_steps(page, job.steps,
                                      delay_ms=0 if any(step.action == "wait" for step in job.steps) else 1500,
                                      lock=job.page_lock(w.id),
                                      screenshot_sink=make_screenshot_sink(w.id),
                                      on_progress=on_scenario_progress)
+            await HISTORY.complete(record, result, page=page, screenshot_sink=make_screenshot_sink(w.id))
             w.scenario_phase = "done" if result["ok"] else "error"
             w.last_action = (f"Сценарий выполнен: {result['completed']} шагов" if result["ok"]
                              else f"Сценарий остановлен на шаге {result['completed'] + 1}: {result.get('error', '')[:60]}")
@@ -730,10 +767,9 @@ async def browser_action(job_id: str, worker_id: str, req: ActionReq,
     return {"message": "Действие выполнено", **result}
 
 
-@app.post("/api/worker/{job_id}/{worker_id}/steps")
-async def browser_steps(job_id: str, worker_id: str, req: StepsReq,
-                        x_katya_token: Optional[str] = Header(default=None)):
-    """Run a whole macro (list of steps) in one tab."""
+async def run_steps_in_tab(job_id: str, worker_id: str, req: StepsReq, x_katya_token: Optional[str],
+                           source: str = "steps", macro_name: str = ""):
+    """Shared by /steps and /macros/{name}/run: auth, validation, execution, history record."""
     job = JOBS.get(job_id)
     if not job or not authorized(job, req.control_token, x_katya_token):
         return forbidden()
@@ -744,11 +780,21 @@ async def browser_steps(job_id: str, worker_id: str, req: StepsReq,
         error = validate_step(step)
         if error:
             return JSONResponse({"ok": False, "error": error}, status_code=400)
+    record = HISTORY.begin(source, steps=req.steps, job_id=job_id, worker_id=worker_id,
+                           url=page.url, macro_name=macro_name)
     result = await run_steps(page, req.steps, delay_ms=max(0, min(req.delay_ms, 10000)),
                              lock=job.page_lock(worker_id), screenshot_sink=make_screenshot_sink(worker_id))
+    await HISTORY.complete(record, result, page=page, screenshot_sink=make_screenshot_sink(worker_id))
     job.screenshots.pop(worker_id, None)
-    log(f"worker {worker_id} macro: {result['completed']}/{len(req.steps)} steps")
-    return result
+    log(f"worker {worker_id} {macro_name or 'macro'}: {result['completed']}/{len(req.steps)} steps")
+    return {**result, "run_id": record.id}
+
+
+@app.post("/api/worker/{job_id}/{worker_id}/steps")
+async def browser_steps(job_id: str, worker_id: str, req: StepsReq,
+                        x_katya_token: Optional[str] = Header(default=None)):
+    """Run a whole macro (list of steps) in one tab."""
+    return await run_steps_in_tab(job_id, worker_id, req, x_katya_token)
 
 
 @app.get("/api/worker/{job_id}/{worker_id}/text")
@@ -961,7 +1007,60 @@ async def run_macro(name: str, req: RunMacroReq, x_katya_token: Optional[str] = 
     if not macro:
         return JSONResponse({"ok": False, "error": "Макрос не найден"}, status_code=404)
     steps = StepsReq(steps=macro["steps"], delay_ms=req.delay_ms, control_token=req.control_token)
-    return await browser_steps(req.job_id, req.worker_id, steps, x_katya_token)
+    return await run_steps_in_tab(req.job_id, req.worker_id, steps, x_katya_token, source="macro", macro_name=name)
+
+
+# ---------------- API: run history and notifications ----------------
+@app.get("/api/runs")
+async def list_runs(limit: int = 50, source: str = "", macro: str = ""):
+    """Newest scenario runs first. source: startup|steps|macro|trigger; macro: macro or trigger name."""
+    return {"ok": True, "runs": HISTORY.list(limit=max(1, min(limit, 500)), source=source, macro_name=macro)}
+
+
+@app.get("/api/runs/{run_id}")
+async def get_run(run_id: str):
+    record = HISTORY.get(run_id)
+    if not record:
+        return JSONResponse({"ok": False, "error": "Запуск не найден"}, status_code=404)
+    return {"ok": True, "run": record.model_dump()}
+
+
+@app.get("/api/notify")
+async def get_notify_settings():
+    """Notification settings with secrets masked."""
+    return {"ok": True, "settings": notifications.masked(notifications.load_settings(NOTIFY_PATH))}
+
+
+@app.post("/api/notify")
+async def set_notify_settings(body: Dict[str, Any], x_katya_token: Optional[str] = Header(default=None),
+                              x_katya_job: Optional[str] = Header(default=None),
+                              x_katya_control_token: Optional[str] = Header(default=None)):
+    """Save settings. A masked secret (•••...) in the body keeps the stored value."""
+    if not writer_authorized(x_katya_token, x_katya_job, x_katya_control_token):
+        return forbidden()
+    try:
+        settings = notifications.merge_settings(notifications.load_settings(NOTIFY_PATH), body)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"Неверные настройки: {str(e).splitlines()[0][:120]}"}, status_code=400)
+    error = notifications.validate_settings(settings)
+    if error:
+        return JSONResponse({"ok": False, "error": error}, status_code=400)
+    notifications.save_settings(NOTIFY_PATH, settings)
+    log("notify settings saved")
+    return {"ok": True, "settings": notifications.masked(settings)}
+
+
+@app.post("/api/notify/test")
+async def test_notify(x_katya_token: Optional[str] = Header(default=None),
+                      x_katya_job: Optional[str] = Header(default=None),
+                      x_katya_control_token: Optional[str] = Header(default=None)):
+    """Send a sample message to every configured channel."""
+    if not writer_authorized(x_katya_token, x_katya_job, x_katya_control_token):
+        return forbidden()
+    outcome = await notifications.send_test(notifications.load_settings(NOTIFY_PATH), log=log)
+    if not outcome["ok"]:
+        return JSONResponse(outcome, status_code=400 if outcome.get("error") else 502)
+    return outcome
 
 
 # ---------------- API: files (screenshots, downloads) ----------------
@@ -1014,6 +1113,7 @@ async def ws(websocket: WebSocket):
                 "log": LOGS[-60:],
                 "system": system_metrics(),
                 "triggers": TRIGGERS.snapshot(),
+                "runs_recent": HISTORY.list(limit=10),
             })
             await websocket.send_text(payload)
             active_scenario = any(w.scenario_phase in ("waiting", "running")
