@@ -99,6 +99,42 @@ python3 app.py
 **Сценарий** = `{name, steps[], start_url, settings{headers, user_agent_mode, profile}, variables{}}`. Один объект и в панели,
 и на странице «Сценарии», и как серверный макрос (`/api/macros`).
 
+## Командная строка
+
+Сценарии запускаются без панели и сервера: из консоли, в CI, из скриптов агентов. Формат файла тот же, что у панели,
+страницы «Сценарии» и серверных макросов; примеры с описанием лежат в `examples/`. На Windows `Katya-Run.bat`
+пробрасывает аргументы в `.venv\Scripts\python.exe -m katya.cli`.
+
+```bash
+python -m katya.cli validate examples/search-wikipedia.json
+```
+
+```bash
+python -m katya.cli run examples/search-wikipedia.json --var query="browser automation" --shots data/cli-shots
+```
+
+```bash
+python -m katya.cli run examples/accept-cookies-template.json --url https://example.com --json
+```
+
+| команда | что делает |
+|---|---|
+| `run <файл> [--url URL] [--var имя=значение …] [--repeat N] [--headed] [--shots DIR] [--json]` | выполнить сценарий в своём Chromium; код выхода 0 при успехе, 1 при сбое |
+| `validate <файл> [--json]` | проверить файл по схеме `Macro`/`Step` и перечислить проблемы |
+| `export-macros <папка> [--url http://127.0.0.1:8010] [--token …]` | скачать серверные макросы (`GET /api/macros`) в JSON-файлы |
+| `import <файл> [--url …] [--token …]` | отправить сценарий на сервер (`POST /api/macros`) |
+
+`run` печатает отчёт по шагам («Клик: селектор «#btn»», «Пауза 1.5 с») или, с `--json`, объект
+`{ok, completed, total, error, duration_ms, screenshot, results}`. При сбое шага скриншот страницы сохраняется в `--shots`.
+Переменные `{{имя}}` берутся из `variables` файла, `--var` и переменных окружения `KATYA_VAR_<ИМЯ>`; `{{password}}` в файле
+не хранится и передаётся только при запуске. `--repeat` заново открывает стартовый адрес на каждом повторе, в значениях
+переменных работают шаблоны `{n}`, `{rand4}`, `{word}` как на странице «Сценарии». `--url` заменяет `start_url`;
+`settings.headers`, `user_agent_mode`, `profile` и `dialogs` учитываются так же, как в панели. Токен для `import` и
+`export-macros`: `--token`, `KATYA_API_TOKEN` или `data/api_token.txt`. Браузер: `KATYA_BROWSER_CHANNEL` и задержка перед
+первым шагом `KATYA_SCENARIO_DELAY` как у сервера. Из Python: `from katya.runner import run_scenario`.
+
+Тесты: `python tests/test_cli.py` (локальная страница на встроенном `http.server`, без pytest).
+
 ## HTTP API
 
 Управление вкладкой: `control_token` из ответа `/api/start` (панель) или API-токен в заголовке `X-Katya-Token` (агенты).
@@ -243,6 +279,10 @@ pnpm build      # tsc + vite -> static/app
 | `katya/notify.py` | уведомления в Telegram и Discord (`data/notify.json`) |
 | `katya/scheduler.py` | планировщик запусков макросов (cron / каждые N минут) |
 | `katya/profiles.py` | профили браузера |
+| `katya/runner.py` | запуск сценария в своём Chromium без сервера |
+| `katya/cli.py`, `Katya-Run.bat` | командная строка: run, validate, export-macros, import |
+| `examples/` | примеры сценариев с описанием |
+| `tests/` | тесты без pytest: `python tests/test_cli.py`, `test_history.py`, `test_scheduler.py`, `test_extension_flow.py` |
 | `katya/mcp_server.py` | MCP-мост для агентов |
 | `static/index.html` | панель (разметка и логика) |
 | `static/scenarios.html` | редактор сценариев |

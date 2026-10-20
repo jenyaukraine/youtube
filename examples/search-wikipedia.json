@@ -1,0 +1,43 @@
+{
+ "name": "Поиск в Википедии",
+ "description": "Открывает страницу поиска английской Википедии, вводит запрос из переменной {{query}} во второе поле input[name=search] (nth 2: первое поле — в шапке, второе — в основной форме, где находится единственная кнопка button[type=submit]), отправляет форму, ждёт список результатов и делает скриншот. Запуск: python -m katya.cli run examples/search-wikipedia.json --var query=\"browser automation\" --shots data/cli-shots (без --var берётся значение из variables).",
+ "start_url": "https://en.wikipedia.org/wiki/Special:Search",
+ "settings": {
+  "headers": {
+   "Accept-Language": "en-US,en;q=0.9"
+  },
+  "user_agent_mode": "chrome",
+  "profile": ""
+ },
+ "variables": {
+  "query": "browser automation testing"
+ },
+ "steps": [
+  {
+   "action": "fill",
+   "kind": "css",
+   "query": "input[name=search]",
+   "nth": 2,
+   "value": "{{query}}",
+   "name": "Ввести запрос"
+  },
+  {
+   "action": "click",
+   "kind": "css",
+   "query": "button[type=submit]",
+   "nth": 1,
+   "name": "Искать"
+  },
+  {
+   "action": "wait_for",
+   "kind": "css",
+   "query": ".mw-search-results",
+   "timeout_ms": 15000,
+   "name": "Результаты"
+  },
+  {
+   "action": "screenshot",
+   "name": "wikipedia-search"
+  }
+ ]
+}
