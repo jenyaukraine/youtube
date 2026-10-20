@@ -19,7 +19,7 @@ function Toast() {
 }
 
 export default function App() {
-  const { state } = useLive();
+  const { state, online } = useLive();
   const [scenarios, setScenarios] = useState<Scenario[]>(localScenarios());
   const [macros, setMacros] = useState<Macro[]>([]);
   const [mode, setMode] = useState<'playwright' | 'chrome'>(() => localStorage.getItem('katya_launch_method') === 'chrome' ? 'chrome' : 'playwright');
@@ -47,7 +47,7 @@ export default function App() {
             <div className="card">
               <h2>Вкладки</h2>
               <details className="scenarios-inline"><summary>Сохранённые сценарии · {scenarios.length + macros.length}</summary><ScenariosPage scenarios={scenarios} macros={macros} onChanged={refreshScenarios} onMacrosChanged={refreshMacros} onStarted={() => undefined} /></details>
-              <WorkersPanel tabs={tabs} scenarios={scenarios} macros={macros} memoryPercent={state.system.memory_percent}
+              <WorkersPanel tabs={tabs} jobs={state.jobs} online={online} scenarios={scenarios} macros={macros} memoryPercent={state.system.memory_percent}
                 onScenariosChanged={() => { refreshScenarios(); refreshMacros(); }} />
             </div>
           </div>}

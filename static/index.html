@@ -14,6 +14,20 @@
 </head>
 <body>
 <div class="bg-fx"></div>
+<main class="unlock-page" id="legacyUnlock" style="display:none">
+  <div class="unlock-halo" aria-hidden="true"></div>
+  <section class="unlock-card" aria-labelledby="legacyUnlockTitle">
+    <div class="unlock-logo" aria-hidden="true">◈</div>
+    <h1 id="legacyUnlockTitle">Katya <span>Browser Lab</span></h1>
+    <p class="unlock-copy">Введите код, чтобы открыть рабочую панель</p>
+    <form id="legacyUnlockForm">
+      <label class="unlock-label" for="legacyPin">Код доступа</label>
+      <div class="unlock-pin-wrap"><input id="legacyPin" type="password" inputmode="numeric" autocomplete="off" maxlength="5" required aria-describedby="legacyUnlockError"><div class="unlock-dots" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div></div>
+      <p class="unlock-error" id="legacyUnlockError" role="alert" hidden></p>
+      <button class="unlock-submit" type="submit">Открыть панель <span aria-hidden="true">↗</span></button>
+    </form>
+  </section>
+</main>
 <div class="wrap">
 
   <header>
@@ -179,6 +193,25 @@ const $ = id => document.getElementById(id);
 let ws, wsAlive = false, curJob = null, tick = 0, activePreviewCard = null, latestCpu = 0;
 const cpuSamples = [];
 
+function showLegacyUnlock(){
+  $('legacyUnlock').style.display='grid';
+  document.querySelector('.wrap').style.display='none';
+  $('legacyPin').focus();
+}
+fetch('/api/unlock/status',{cache:'no-store'}).then(r=>r.json()).then(r=>{if(!r.unlocked)showLegacyUnlock();}).catch(()=>{});
+$('legacyPin').addEventListener('input',e=>{
+  e.target.value=e.target.value.replace(/\D/g,'').slice(0,5);
+  $('legacyUnlockError').hidden=true;
+  $('legacyUnlock').querySelectorAll('.unlock-dots span').forEach((dot,i)=>dot.classList.toggle('filled',i<e.target.value.length));
+});
+$('legacyUnlockForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const response=await fetch('/api/unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:$('legacyPin').value})});
+  const result=await response.json();
+  if(response.ok&&result.ok) location.reload();
+  else { $('legacyUnlockError').textContent=result.error||'Неверный код'; $('legacyUnlockError').hidden=false; $('legacyPin').value=''; $('legacyPin').focus(); }
+});
+
 // sliders
 const wr = $('workers');
 wr.addEventListener('input', () => $('workersVal').textContent = wr.value);
@@ -216,8 +249,9 @@ async function start(){
       body: JSON.stringify({url, workers:+wr.value, duration, headers, user_agent_mode:$('uaMode').value, steps:(window._pendingStartSteps=startSteps())})
     });
     const j = await r.json();
+    if(r.status===401){ showLegacyUnlock(); return; }
     if(!j.ok) toast(j.error || 'Ошибка запуска','err');
-    else { toast('Открыто вкладок: ' + j.workers,'ok'); curJob = j.id; sessionStorage.setItem('katya_control_' + j.id, j.control_token); if(window._pendingStartSteps?.length) try{ sessionStorage.setItem('katya_steps_'+j.id, JSON.stringify(window._pendingStartSteps)); }catch{} }
+    else { toast('Запускаю вкладок: ' + j.workers,'ok'); curJob = j.id; sessionStorage.setItem('katya_control_' + j.id, j.control_token); if(window._pendingStartSteps?.length) try{ sessionStorage.setItem('katya_steps_'+j.id, JSON.stringify(window._pendingStartSteps)); }catch{} }
   }catch(e){ toast('Нет связи с ботом: '+e.message,'err'); }
   $('btnStart').disabled = false;
 }
@@ -1034,6 +1068,17 @@ function render(data){
       card.querySelectorAll('.worker-actions button').forEach(button => { button.dataset.job = w._j.id; button.dataset.worker = w.id; });
       if(!card._firstShot){ card._firstShot=true; loadShot(card,true); }
     });
+  }
+  panel.querySelector('.workers-alert')?.remove();
+  const recent=jobs.filter(j=>Date.now()/1000-j.created<300);
+  const failed=recent.find(j=>j.status==='error'||j.status==='running'&&j.launch_error);
+  if(failed){
+    const alert=document.createElement('div'); alert.className='workers-alert'; alert.setAttribute('role','alert');
+    const detail=failed.launch_error||(data.log||[]).slice().reverse().find(line=>line.includes(`job ${failed.id} launch error:`));
+    alert.textContent=detail||`Не удалось запустить браузер для ${failed.url}. Подробности в диагностике сервера.`;
+    panel.prepend(alert);
+  } else if(!allWorkers.length&&recent.some(j=>j.status==='pending'||j.status==='running'&&!j.workers_list?.length)){
+    panel.querySelector('.empty').innerHTML='Браузер запускается…<br><b>Карточки появятся после открытия страниц.</b>';
   }
 
   // log

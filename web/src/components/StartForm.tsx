@@ -40,7 +40,7 @@ export function StartForm({ jobs, scenarios, macros, ownJob, onChrome }: Props) 
     setBusy(false);
     if (!r.ok) { toast(r.error || 'Ошибка запуска', 'err'); return; }
     localStorage.setItem('katya_last_url', u);
-    toast(`Открыто вкладок: ${r.workers}`);
+    toast(`Запускаю вкладок: ${r.workers}`);
   };
 
   return (

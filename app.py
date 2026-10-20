@@ -665,7 +665,8 @@ async def run_job(job: Job):
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
     except Exception as e:
-        log(f"job {job.id} launch error: {str(e)[:200]}")
+        job.launch_error = f"Не удалось запустить браузер: {str(e)[:200]}"
+        log(f"job {job.id} launch error: {job.launch_error}")
         job.status = "error"
     finally:
         await stop_job(job)
