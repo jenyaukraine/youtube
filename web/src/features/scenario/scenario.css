@@ -1,0 +1,746 @@
+/* Панель «Сценарий»: прогресс сервера, рекордер, список шагов, ручное действие. */
+.scenario-panel {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.scenario-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.scenario-head-status {
+  font: 600 11px var(--mono);
+  color: var(--txt-3);
+}
+
+.scenario-status {
+  min-height: 1em;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--txt-3);
+}
+
+.scenario-status:empty {
+  display: none;
+}
+
+.scenario-status.running {
+  color: var(--info);
+}
+
+/* ---------- прогресс сценария: что происходит сейчас ---------- */
+.scenario-progress {
+  padding: 14px 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: linear-gradient(180deg, rgba(23, 28, 40, 0.9), rgba(18, 22, 32, 0.9));
+}
+
+.scenario-progress.error {
+  border-color: var(--danger-line);
+}
+
+.scenario-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-3);
+  min-height: 24px;
+}
+
+.scenario-now-k {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--txt);
+}
+
+.scenario-now-k::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--s-2);
+  border-radius: 50%;
+  background: var(--info);
+  vertical-align: middle;
+  animation: scenario-pulse 1.2s ease-in-out infinite;
+}
+
+.scenario-progress.done .scenario-now-k {
+  color: var(--accent);
+}
+
+.scenario-progress.done .scenario-now-k::before {
+  content: '✓';
+  width: auto;
+  height: auto;
+  margin-right: 6px;
+  background: none;
+  animation: none;
+}
+
+.scenario-progress.error .scenario-now-k {
+  color: var(--danger);
+}
+
+.scenario-progress.error .scenario-now-k::before {
+  display: none;
+}
+
+.scenario-now-t {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--txt-2);
+}
+
+.scenario-now-t:empty {
+  display: none;
+}
+
+@keyframes scenario-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 var(--info-line);
+  }
+
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+
+/* действие по выбранной фишке или после завершения */
+.scenario-action {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3);
+  border: 1px solid var(--info-line);
+  border-radius: var(--r-s);
+  background: var(--info-dim);
+}
+
+.scenario-action[data-mode='done'] {
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+}
+
+.scenario-action-t {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #e6f1ff;
+}
+
+.scenario-action[data-mode='done'] .scenario-action-t {
+  color: var(--txt-2);
+}
+
+.scenario-run {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 var(--s-3);
+  border: 0;
+  border-radius: 7px;
+  background: var(--info);
+  color: #071424;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.scenario-run:hover {
+  filter: brightness(1.08);
+}
+
+.scenario-action[data-mode='done'] .scenario-run {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.scenario-action-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-height: 32px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--txt-3);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.scenario-action-x:hover {
+  border-color: var(--line-2);
+  color: var(--txt);
+}
+
+/* дорожка */
+.scenario-track {
+  height: 5px;
+  margin-top: var(--s-3);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.scenario-track i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), #b9f5c7);
+  box-shadow: 0 0 10px var(--accent-line);
+  transition: width 0.4s var(--ease);
+}
+
+.scenario-progress.error .scenario-track i {
+  background: var(--danger);
+  box-shadow: 0 0 10px var(--danger-line);
+}
+
+/* фишки шагов: номер всегда, текст — у текущей, упавшей, выбранной и при наведении */
+.scenario-chips {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: var(--s-3);
+  padding: 2px 0;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+  mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+
+.scenario-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.scenario-chips li {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--txt-3);
+  font: 600 11px var(--mono);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    color 0.2s;
+}
+
+.scenario-chips li span {
+  display: none;
+  font: 600 11px var(--font);
+}
+
+.scenario-chips li:hover {
+  border-color: var(--txt-3);
+  color: var(--txt);
+}
+
+.scenario-chips li:hover span,
+.scenario-chips li.current span,
+.scenario-chips li.failed span,
+.scenario-chips li.picked span {
+  display: inline;
+}
+
+.scenario-chips li.done {
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.scenario-chips li.current,
+.scenario-chips li.picked {
+  padding: 0 10px 0 8px;
+  border-color: var(--info);
+  background: var(--info-dim);
+  color: #e6f1ff;
+}
+
+.scenario-chips li.current {
+  box-shadow: 0 0 14px var(--info-line);
+}
+
+.scenario-chips li.current b {
+  color: #fff;
+}
+
+.scenario-chips li.failed {
+  border-color: var(--danger);
+  background: var(--danger-dim);
+  color: #ffd4d8;
+}
+
+.scenario-progress.done .scenario-chips li:not(.picked) {
+  opacity: 0.75;
+}
+
+/* ---------- рекордер ---------- */
+.recorder-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--s-2);
+}
+
+.recorder-bar .btn {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.recorder-record {
+  border-color: var(--danger-line);
+  color: var(--danger);
+}
+
+.recorder-record.recording {
+  border-color: var(--danger);
+  background: var(--danger-dim);
+  color: #ffd4d8;
+  animation: recorder-pulse 1.4s infinite;
+}
+
+@keyframes recorder-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--danger-line);
+  }
+
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+.recorder-repeat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 var(--s-1) 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface-2);
+  color: var(--txt-3);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.recorder-repeat input {
+  width: 44px;
+  min-height: 26px;
+  padding: 0;
+  border-radius: 6px;
+  font: 700 12px var(--mono);
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.recorder-repeat input::-webkit-inner-spin-button,
+.recorder-repeat input::-webkit-outer-spin-button {
+  appearance: none;
+}
+
+.recorder-replay {
+  min-height: 26px;
+  margin-left: 2px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--info);
+  color: #071424;
+  font-size: 11.5px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.recorder-replay:hover {
+  filter: brightness(1.08);
+}
+
+.recorder-replay.running {
+  background: var(--warn);
+  color: #241a05;
+}
+
+.recorder-load {
+  width: auto;
+  max-width: 220px;
+  min-height: 34px;
+  padding: 0 30px 0 11px;
+  border-radius: var(--r-s);
+  color: var(--txt-2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.recorder-more {
+  position: relative;
+  margin-left: auto;
+}
+
+.recorder-more summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface-3);
+  color: var(--txt-2);
+  font: 800 14px/1 var(--font);
+  letter-spacing: 0.1em;
+  list-style: none;
+  cursor: pointer;
+}
+
+.recorder-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.recorder-more summary:hover,
+.recorder-more[open] summary {
+  border-color: var(--txt-3);
+  color: var(--txt);
+}
+
+.recorder-menu {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  z-index: 6;
+  display: grid;
+  gap: 2px;
+  min-width: 230px;
+  padding: 6px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface-2);
+  box-shadow: var(--shadow);
+}
+
+.recorder-menu button {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--txt-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.recorder-menu button:hover {
+  background: var(--surface-3);
+  color: var(--txt);
+}
+
+.recorder-clear {
+  width: 34px;
+  color: var(--txt-3);
+}
+
+.recorder-clear:hover {
+  color: var(--danger);
+}
+
+/* ---------- записанные шаги ---------- */
+.step-list {
+  display: grid;
+  gap: var(--s-1);
+  list-style: none;
+  counter-reset: step;
+}
+
+.step-list li {
+  counter-increment: step;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  color: var(--txt-2);
+  font-size: 12.5px;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    opacity 0.15s;
+}
+
+.step-list li::before {
+  content: counter(step);
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--surface-3);
+  color: var(--txt-3);
+  font: 700 10.5px var(--font);
+}
+
+.step-list li:hover {
+  border-color: var(--txt-3);
+}
+
+.step-list li.skipped {
+  opacity: 0.45;
+}
+
+.step-list li.from {
+  border-color: var(--info-line);
+  background: var(--info-dim);
+  color: var(--txt);
+}
+
+.step-list li.from::before {
+  content: '▶';
+  background: var(--info);
+  color: #071424;
+}
+
+.step-list li.picked {
+  border-color: var(--danger-line);
+}
+
+.step-list li.editing {
+  border-color: var(--line-2);
+  background: var(--surface-2);
+}
+
+.step-pick {
+  flex: 0 0 auto;
+}
+
+.step-text {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.step-edit {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--surface-3);
+  color: var(--info);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.step-edit:hover,
+.step-edit[aria-expanded='true'] {
+  border-color: var(--info-line);
+  background: var(--info-dim);
+}
+
+.step-list-empty {
+  margin: 0;
+}
+
+/* действия над выбранными */
+.step-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) 10px;
+  border: 1px solid var(--danger-line);
+  border-radius: var(--r-s);
+  background: var(--danger-dim);
+  color: #ffd4d8;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.step-bulk span {
+  flex: 1;
+}
+
+.step-bulk-delete {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--danger-ink);
+}
+
+.step-bulk-delete:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger-ink);
+  filter: brightness(1.08);
+}
+
+/* встроенный редактор шага */
+.step-editor {
+  flex-basis: 100%;
+  display: grid;
+  gap: 10px;
+  margin-top: 3px;
+  padding: var(--s-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface);
+  cursor: default;
+}
+
+.step-editor strong {
+  font-size: 13px;
+  color: var(--txt);
+}
+
+.step-editor-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.step-editor label {
+  display: grid;
+  flex: 1;
+  gap: 5px;
+  min-width: 130px;
+  margin: 0;
+}
+
+.step-editor input {
+  min-height: 35px;
+  padding: 6px 9px;
+  border-radius: var(--r-s);
+  font-size: 12.5px;
+}
+
+.step-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.step-editor-delete {
+  color: var(--danger);
+}
+
+.step-editor-delete:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+/* ---------- ручное действие ---------- */
+.manual-action > summary {
+  color: var(--txt-3);
+  font-size: 11.5px;
+}
+
+.manual-form {
+  display: grid;
+  gap: 10px;
+}
+
+.manual-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--s-2);
+}
+
+.manual-grid input,
+.manual-grid select {
+  min-height: 38px;
+  padding: 8px 11px;
+  border-radius: var(--r-s);
+  font-size: 12.5px;
+}
+
+.manual-grid select {
+  padding-right: 30px;
+}
+
+.manual-grid .manual-query,
+.manual-grid .manual-value {
+  grid-column: 1 / -1;
+}
+
+.manual-form .hint {
+  margin: 0;
+}
+
+.manual-submit {
+  justify-self: start;
+}
+
+/* ---------- узкие экраны ---------- */
+@media (max-width: 480px) {
+  .recorder-bar > .btn,
+  .recorder-bar > .recorder-repeat,
+  .recorder-bar > .recorder-load {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: none;
+    justify-content: center;
+  }
+
+  .recorder-repeat input {
+    flex: 1;
+  }
+
+  .recorder-more {
+    margin-left: 0;
+  }
+
+  .recorder-bar > .recorder-clear {
+    flex: 0 0 auto;
+    width: 34px;
+  }
+
+  .scenario-now-t {
+    flex-basis: 100%;
+  }
+
+  .manual-grid {
+    grid-template-columns: 1fr;
+  }
+}

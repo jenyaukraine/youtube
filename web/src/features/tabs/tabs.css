@@ -1,0 +1,413 @@
+/* Вкладки Playwright: форма запуска, сетка карточек, плитка, живой кадр. */
+
+/* ---------- форма запуска ---------- */
+.start-range {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+}
+
+.start-range input[type='range'] {
+  flex: 1;
+}
+
+.start-range-value {
+  min-width: 52px;
+  padding: 5px 0;
+  border-radius: var(--r-s);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font: 700 15px var(--mono);
+  text-align: center;
+}
+
+.start-form textarea {
+  min-height: 80px;
+}
+
+.start-actions {
+  margin-top: var(--s-5);
+}
+
+.start-actions .btn-primary {
+  flex: 1;
+}
+
+.start-count {
+  margin-top: var(--s-3);
+}
+
+/* ---------- панель вкладок ---------- */
+.tabs-library {
+  margin: 0 0 var(--s-4);
+}
+
+.tabs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: var(--s-3);
+  align-items: start;
+}
+
+.tabs-grid > .empty {
+  grid-column: 1 / -1;
+}
+
+/* ---------- карточка вкладки ---------- */
+.tab {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+.tab:not(.tab-collapsed) {
+  grid-column: 1 / -1;
+  padding: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface);
+}
+
+/* Свёрнутая карточка — только плитка. */
+.tab-collapsed > :not(.tab-tile) {
+  display: none;
+}
+
+.tab-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-width: 0;
+  padding: var(--s-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: var(--surface-2);
+  color: var(--txt);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.tab-tile:hover {
+  border-color: var(--info);
+  background: var(--surface-3);
+}
+
+.tab-tile-shot {
+  display: grid;
+  place-items: center;
+  flex: 0 0 110px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 7px;
+  background: #080c14;
+  color: var(--txt-3);
+  font-size: 10px;
+  text-align: center;
+}
+
+.tab-tile-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tab-tile-info {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tab-tile-info > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-tile-info strong {
+  font-size: 12.5px;
+}
+
+.tab-tile-info small {
+  font: 10.5px var(--mono);
+  color: var(--txt-3);
+}
+
+.tab-tile-state {
+  font-size: 10.5px;
+  color: var(--accent);
+}
+
+.tab-tile-chevron {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--txt-3);
+  transition: transform 0.2s var(--ease);
+}
+
+.tab:not(.tab-collapsed) .tab-tile-chevron {
+  transform: rotate(180deg);
+}
+
+.tab-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+  font-size: 12px;
+  color: var(--txt-3);
+}
+
+.tab-meta b {
+  font-family: var(--mono);
+  color: var(--txt);
+}
+
+.tab-meta-action {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-meta-hours {
+  font-family: var(--mono);
+  color: var(--txt-2);
+}
+
+.tab-url {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--txt-3);
+  font: 11.5px var(--mono);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.tab-url:not(:disabled):hover {
+  background: var(--surface-3);
+  color: var(--txt-2);
+}
+
+.tab-url:not(:disabled):hover::after {
+  content: '  ✎ изменить';
+  color: var(--txt-3);
+  font: 600 10.5px var(--font);
+}
+
+.tab-url:disabled {
+  cursor: default;
+}
+
+.tab .tab-url-edit[type='url'] {
+  min-height: 34px;
+  padding: 6px 10px;
+  border-color: var(--info);
+  font: 12px var(--mono);
+}
+
+/* ---------- живой кадр ---------- */
+.preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  min-height: 160px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: #06080c;
+  cursor: crosshair;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.38);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.preview:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow:
+    var(--focus),
+    0 18px 50px rgba(0, 0, 0, 0.38);
+}
+
+.preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  user-select: none;
+  -webkit-user-drag: none;
+  touch-action: none;
+}
+
+.preview-note {
+  color: var(--txt-3);
+  font-size: 12px;
+}
+
+.preview-hint,
+.preview-time {
+  position: absolute;
+  z-index: 2;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--r-s);
+  background: rgba(6, 8, 12, 0.82);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+.preview-hint {
+  left: 10px;
+  top: 10px;
+  max-width: calc(100% - 20px);
+  color: #dfe6ef;
+  font: 600 11px/1.4 var(--font);
+}
+
+.preview-time {
+  right: 10px;
+  bottom: 10px;
+  color: var(--txt-2);
+  font: 11px var(--mono);
+}
+
+.preview-hit {
+  position: absolute;
+  z-index: 3;
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  pointer-events: none;
+  animation: preview-hit-pulse 1s ease-in-out 3;
+}
+
+@keyframes preview-hit-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px rgba(0, 0, 0, 0.5),
+      0 0 24px var(--accent-line);
+  }
+  50% {
+    box-shadow:
+      0 0 0 6px var(--accent-dim),
+      0 0 40px var(--accent);
+  }
+}
+
+/* ---------- адаптив ---------- */
+@media (max-width: 600px) {
+  .tab:not(.tab-collapsed) {
+    padding: var(--s-2);
+  }
+
+  .tab-tile-shot {
+    flex-basis: 88px;
+  }
+
+  .tab-actions .btn {
+    flex: 1;
+  }
+
+  .preview {
+    min-height: 120px;
+  }
+
+  .preview-hint {
+    display: none;
+  }
+
+  .start-actions .btn {
+    flex: 1;
+  }
+}
+
+/* ---------- панель над сеткой: счётчик, фильтр, «Закрыть все» ---------- */
+.tabs-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+
+.tabs-count {
+  font-size: 12px;
+  color: var(--txt-2);
+}
+
+.tabs-count b {
+  color: var(--txt);
+}
+
+.tabs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-right: auto;
+}
+
+.tabs-filters .btn span {
+  font: 700 10px var(--mono);
+  color: var(--txt-3);
+}
+
+.tabs-filters .btn.on {
+  border-color: var(--info-line);
+  background: var(--info-dim);
+  color: var(--txt);
+}
+
+.tabs-filters .btn:last-child span {
+  color: var(--danger);
+}
+
+.card > .note {
+  margin-bottom: var(--s-3);
+}
+
+/* ---------- состояние вкладки на плитке ---------- */
+.tab-tile-info strong em {
+  margin-left: 6px;
+  font: 600 10px var(--mono);
+  font-style: normal;
+  color: var(--txt-3);
+}
+
+.tab[data-state='error'] .tab-tile,
+.tab[data-state='blocked'] .tab-tile {
+  border-color: var(--danger-line);
+}
+
+.tab[data-state='error'] .tab-tile-state,
+.tab[data-state='blocked'] .tab-tile-state {
+  color: var(--danger);
+}
+
+.tab[data-state='paused'] .tab-tile {
+  border-color: rgba(245, 199, 107, 0.4);
+}
+
+.tab[data-state='paused'] .tab-tile-state {
+  color: var(--warn);
+}
+
+.tab[data-state='ready'] .tab-tile-state {
+  color: var(--info);
+}

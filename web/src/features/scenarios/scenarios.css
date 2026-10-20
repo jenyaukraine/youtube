@@ -1,0 +1,274 @@
+/* Страница сценариев: боковой список + редактор шагов и переменных. */
+.scn-layout {
+  display: grid;
+  grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: start;
+}
+
+.scn-sidebar,
+.scn-editor {
+  min-width: 0;
+}
+
+.scn-sidebar h2 {
+  margin-bottom: var(--s-3);
+  font-size: 14px;
+}
+
+.scn-sidebar h3 {
+  margin: var(--s-4) 0 var(--s-2);
+}
+
+/* ---------- список сценариев ---------- */
+.scn-list {
+  display: grid;
+  gap: 6px;
+  margin-top: var(--s-3);
+}
+
+.scn-item,
+.scn-macro {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--surface-3);
+  text-align: left;
+}
+
+.scn-item {
+  padding: 10px 12px;
+  color: var(--txt);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.scn-item:hover {
+  border-color: var(--txt-3);
+}
+
+.scn-item.active {
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+}
+
+.scn-item strong,
+.scn-macro-open strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.scn-item small,
+.scn-macro-open small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--txt-3);
+}
+
+.scn-macro {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0;
+}
+
+.scn-macro-open,
+.scn-macro-remove {
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--txt);
+  cursor: pointer;
+}
+
+.scn-macro-open {
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.scn-macro-open:hover strong {
+  color: var(--accent);
+}
+
+.scn-macro-remove {
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--danger);
+}
+
+.scn-macro-remove:hover {
+  text-decoration: underline;
+}
+
+.scn-files {
+  margin-top: var(--s-4);
+}
+
+/* ---------- редактор ---------- */
+.scn-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+
+.scn-head h2 {
+  font-size: 14px;
+}
+
+.scn-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+  margin-top: var(--s-4);
+}
+
+.scn-section {
+  margin-top: var(--s-5);
+}
+
+.scn-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.scn-section-head .hint {
+  margin-top: 2px;
+}
+
+.scn-bulk {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+  padding: 8px 10px;
+  border: 1px solid var(--danger-line);
+  border-radius: var(--r-s);
+  background: var(--danger-dim);
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffd4d8;
+}
+
+.scn-bulk span {
+  flex: 1;
+}
+
+/* ---------- шаги ---------- */
+.scn-steps {
+  display: grid;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+
+.scn-step {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface-3);
+}
+
+.scn-step-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.scn-step-head::-webkit-details-marker {
+  display: none;
+}
+
+.scn-step-head::before {
+  content: '▸';
+  color: var(--info);
+}
+
+.scn-step[open] > .scn-step-head::before {
+  content: '▾';
+}
+
+.scn-step-pick {
+  flex: 0 0 auto;
+}
+
+.scn-step-head strong {
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+.scn-step-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.scn-step-ops {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.scn-step-ops .btn {
+  min-height: 28px;
+  padding: 0 9px;
+}
+
+.scn-step-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: var(--s-3);
+}
+
+.scn-step-grid label {
+  margin-top: 0;
+}
+
+.scn-wide {
+  grid-column: 1 / -1;
+}
+
+/* ---------- переменные ---------- */
+.scn-vars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: var(--s-3);
+}
+
+.scn-vars label {
+  margin-top: 0;
+  text-transform: none;
+  font-family: var(--mono);
+}
+
+/* ---------- адаптив ---------- */
+@media (max-width: 900px) {
+  .scn-layout,
+  .scn-cols,
+  .scn-step-grid,
+  .scn-vars {
+    grid-template-columns: 1fr;
+  }
+}

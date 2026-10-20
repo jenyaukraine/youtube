@@ -1,12 +1,40 @@
-// Типы API Katya. Единственный источник правды по схеме шага — katya/actions.py; здесь зеркало для фронтенда.
+// Типы API Katya. Схема шага живёт в katya/actions.py; здесь её зеркало для фронтенда.
 export type ActionName =
-  | 'navigate' | 'reload' | 'back'
-  | 'click' | 'wait_click' | 'dblclick' | 'point' | 'move' | 'mouse_drag' | 'inspect'
-  | 'fill' | 'type' | 'press' | 'hover' | 'drag' | 'scroll' | 'select'
-  | 'wait' | 'wait_for' | 'wait_gone' | 'wait_url'
-  | 'text' | 'attribute' | 'exists' | 'count' | 'screenshot' | 'page_text';
+  | 'navigate'
+  | 'reload'
+  | 'back'
+  | 'click'
+  | 'wait_click'
+  | 'dblclick'
+  | 'point'
+  | 'move'
+  | 'mouse_drag'
+  | 'inspect'
+  | 'fill'
+  | 'type'
+  | 'press'
+  | 'hover'
+  | 'drag'
+  | 'scroll'
+  | 'select'
+  | 'wait'
+  | 'wait_for'
+  | 'wait_gone'
+  | 'wait_url'
+  | 'text'
+  | 'attribute'
+  | 'exists'
+  | 'count'
+  | 'screenshot'
+  | 'page_text';
 
 export type Kind = 'css' | 'text' | 'role' | 'label' | 'placeholder' | 'xpath';
+
+export interface ScrollState {
+  x: number;
+  y: number;
+  targets: { query: string; top: number; left: number }[];
+}
 
 export interface Step {
   action: ActionName;
@@ -23,8 +51,9 @@ export interface Step {
   optional?: boolean;
   name?: string;
   replace?: boolean;
-  duration_ms?: string; // так сервер отдаёт паузу в snapshot сценария
-  scroll_state?: { x: number; y: number; targets: { query: string; top: number; left: number }[] };
+  /** Так сервер отдаёт паузу в snapshot сценария. */
+  duration_ms?: string;
+  scroll_state?: ScrollState;
 }
 
 export interface ScenarioSettings {
@@ -33,6 +62,7 @@ export interface ScenarioSettings {
   profile?: string;
 }
 
+/** Сценарий, сохранённый в браузере. */
 export interface Scenario {
   id: string;
   name: string;
@@ -43,6 +73,7 @@ export interface Scenario {
   createdAt: string;
 }
 
+/** Сценарий на сервере (виден MCP-агентам). */
 export interface Macro {
   name: string;
   steps: Step[];
@@ -51,8 +82,10 @@ export interface Macro {
   settings?: ScenarioSettings;
 }
 
+export type ScenarioPhase = 'waiting' | 'running' | 'done' | 'error' | '';
+
 export interface ScenarioStatus {
-  phase?: 'waiting' | 'running' | 'done' | 'error' | '';
+  phase?: ScenarioPhase;
   current?: number;
   completed?: number;
   wait_until?: number;
@@ -88,7 +121,12 @@ export interface Job {
   launch_error?: string;
 }
 
-export interface TriggerWhen { kind: Kind | 'url'; query: string; role?: string }
+export interface TriggerWhen {
+  kind: Kind | 'url';
+  query: string;
+  role?: string;
+}
+
 export interface Trigger {
   id: string;
   name: string;
@@ -101,21 +139,62 @@ export interface Trigger {
   fired: number;
 }
 
-export interface SystemMetrics { cpu_percent: number; memory_percent: number; chromium_processes: number }
+export interface SystemMetrics {
+  cpu_percent: number;
+  memory_percent: number;
+  chromium_processes: number;
+}
 
 export interface LiveState {
   jobs: Job[];
   log: string[];
   system: SystemMetrics;
   triggers?: Trigger[];
-  runs_recent?: unknown[];
 }
 
-export interface ActionResult { ok: boolean; error?: string; url?: string; ms?: number; selector?: string; scroll_state?: Step['scroll_state']; [k: string]: unknown }
-export interface StepsResult { ok: boolean; completed: number; error?: string; results: (ActionResult & { step: string })[] }
-export interface FileItem { name: string; size: number; modified: number }
+export interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface ActionResult {
+  ok: boolean;
+  error?: string;
+  url?: string;
+  ms?: number;
+  selector?: string;
+  scroll_state?: ScrollState;
+}
+
+export interface StepsResult {
+  ok: boolean;
+  completed: number;
+  error?: string;
+  results: (ActionResult & { step: string })[];
+}
+
+export interface FileItem {
+  name: string;
+  size: number;
+  modified: number;
+}
+
 export interface TriggerTestResult {
-  ok: boolean; error?: string; url?: string; matches?: boolean; count?: number;
-  box?: { x: number; y: number; w: number; h: number } | null;
+  ok: boolean;
+  error?: string;
+  url?: string;
+  matches?: boolean;
+  count?: number;
+  box?: Box | null;
   run?: StepsResult;
+}
+
+/** Откуда загружаются шаги: локальный сценарий, серверный макрос или черновик вкладки. */
+export interface StepSource {
+  steps: Step[];
+  startUrl?: string;
+  settings?: ScenarioSettings;
+  variables?: Record<string, string>;
 }

@@ -1,0 +1,109 @@
+/* Шапка, бейдж связи, диагностика. */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding-bottom: 26px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+}
+
+.brand-logo {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 1px solid var(--accent-line);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(163, 242, 194, 0.18), rgba(120, 100, 255, 0.11));
+  color: var(--accent);
+}
+
+.brand-logo svg {
+  width: 28px;
+  height: 28px;
+  filter: drop-shadow(0 0 9px rgba(163, 242, 194, 0.72));
+}
+
+.brand h1 {
+  font-size: clamp(23px, 2.4vw, 30px);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+}
+
+.brand h1 span {
+  color: var(--accent);
+}
+
+.brand p {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--txt-2);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: rgba(22, 29, 44, 0.9);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--txt-2);
+}
+
+.badge.online .dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.badge.offline .dot {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-dim);
+}
+
+.metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4);
+  font-size: 12px;
+  color: var(--txt-3);
+}
+
+.metrics b {
+  color: var(--txt);
+  font-family: var(--mono);
+}
+
+.log {
+  max-height: 220px;
+  min-height: 72px;
+  margin-top: var(--s-3);
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: #0a0f18;
+  overflow: auto;
+  font: 11.5px/1.7 var(--mono);
+  color: var(--txt-3);
+}
+
+@media (max-width: 600px) {
+  .header {
+    flex-wrap: wrap;
+  }
+
+  .brand-logo {
+    width: 46px;
+    height: 46px;
+    border-radius: 13px;
+  }
+}

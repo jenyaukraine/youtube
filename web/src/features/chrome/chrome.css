@@ -1,0 +1,244 @@
+/* Режим «Мой Chrome»: карточка управления, живой кадр, видео, список вкладок. */
+
+/* ---------- карточка управления ---------- */
+.chrome-connection {
+  display: grid;
+  gap: 3px;
+  margin-top: var(--s-4);
+  padding: 12px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: var(--surface-2);
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.chrome-connection strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.chrome-connection small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--txt-3);
+}
+
+.chrome-connection.ok {
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+}
+
+.chrome-connection.ok strong {
+  color: var(--accent);
+}
+
+.chrome-connection.err {
+  border-color: var(--danger-line);
+  background: var(--danger-dim);
+}
+
+.chrome-connection.err strong {
+  color: var(--danger);
+}
+
+.chrome-control details.fold {
+  margin-top: var(--s-3);
+}
+
+.chrome-tab-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.chrome-tab-list button {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface-3);
+  color: var(--txt);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.chrome-tab-list button:hover {
+  border-color: var(--accent-line);
+}
+
+.chrome-tab-list b,
+.chrome-tab-list small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chrome-tab-list b {
+  font-size: 12.5px;
+}
+
+.chrome-tab-list small {
+  margin-top: 2px;
+  color: var(--txt-3);
+}
+
+.chrome-zip {
+  margin-top: var(--s-3);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chrome-actions {
+  margin-top: var(--s-4);
+}
+
+.chrome-actions .btn-primary {
+  flex: 1;
+}
+
+/* ---------- рабочая область ---------- */
+.chrome-workspace {
+  min-width: 0;
+}
+
+.chrome-library {
+  margin: 0 0 var(--s-4);
+}
+
+.chrome-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+
+.chrome-tab-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--txt-2);
+}
+
+.chrome-hidden {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+
+/* ---------- живой кадр ---------- */
+.chrome-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 260px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: #06080c;
+  color: var(--txt-3);
+  font-size: 13px;
+  text-align: center;
+  cursor: crosshair;
+  outline: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.chrome-frame:focus-visible {
+  border-color: var(--cyan);
+  box-shadow: var(--focus);
+}
+
+.chrome-frame.empty {
+  border-style: dashed;
+  background: linear-gradient(145deg, #0d1424, #06080c);
+  cursor: default;
+}
+
+.chrome-frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.chrome-frame-empty {
+  max-width: 300px;
+  padding: 20px;
+  line-height: 1.5;
+}
+
+/* ---------- видео ---------- */
+.chrome-video {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--s-2);
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--surface-2);
+}
+
+.chrome-video .btn {
+  min-width: 38px;
+  padding: 0 8px;
+}
+
+.chrome-video input[type='range'] {
+  flex: 1;
+  min-width: 40px;
+}
+
+.chrome-video span {
+  min-width: 84px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+  color: var(--txt-2);
+}
+
+.chrome-status {
+  min-height: 18px;
+  margin-top: var(--s-2);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--txt-3);
+}
+
+@media (max-width: 600px) {
+  .chrome-frame {
+    min-height: 180px;
+  }
+
+  .chrome-video {
+    flex-wrap: wrap;
+  }
+
+  .chrome-video input[type='range'] {
+    order: 1;
+    flex-basis: 100%;
+  }
+
+  .chrome-video span {
+    flex: 1;
+  }
+}

@@ -1,0 +1,84 @@
+/* Общие UI-элементы: тост, переключатель способа запуска. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 50;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 12px 18px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: var(--surface-2);
+  color: var(--txt);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translate(-50%, 12px);
+  pointer-events: none;
+  transition:
+    opacity 0.2s,
+    transform 0.25s var(--ease);
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.toast.ok {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+.toast.err {
+  border-color: var(--danger);
+  color: #ffd4d8;
+}
+
+.method-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+}
+
+.method-switch button {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: var(--surface-3);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.method-switch button span {
+  font-size: 16px;
+  color: var(--txt-3);
+}
+
+.method-switch button b {
+  font-size: 13px;
+  color: var(--txt);
+}
+
+.method-switch button small {
+  color: var(--txt-3);
+}
+
+.method-switch button:hover {
+  border-color: var(--txt-3);
+}
+
+.method-switch button.active {
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+}
+
+.method-switch button.active span {
+  color: var(--accent);
+}
